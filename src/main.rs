@@ -11,6 +11,19 @@ use std::process::Command;
 use tempfile::tempdir;
 use url::Url;
 
+#[derive(Debug, Clone)]
+struct BuildArgs {
+    url: String,
+    name: String,
+    icon: Option<String>,
+    fullscreen: bool,
+    no_decorations: bool,
+    user_agent: Option<String>,
+    width: Option<f64>,
+    height: Option<f64>,
+    dark_mode: bool,
+}
+
 /// Deskify - Turn any URL into a native Linux desktop application using Tauri.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -58,13 +71,72 @@ enum Commands {
         /// Force the webview into Dark Mode
         #[arg(short, long)]
         dark_mode: bool,
+
+        /// Print the generated Tauri config JSON and exit
+        #[arg(long)]
+        print_config: bool,
+
+        /// Show planned build/install actions without building or installing
+        #[arg(long)]
+        dry_run: bool,
     },
     /// List all installed apps created by deskify
     List,
+    /// Check local prerequisites and environment diagnostics
+    Doctor,
     /// Remove a specific app by its internal ID
     Remove {
         /// The safe name/ID of the app (e.g., "youtube")
         id: String,
+    },
+    /// Rebuild and reinstall an existing app ID with new settings (alpha: URL is required)
+    Update {
+        /// The existing internal ID (e.g., "chatgpt")
+        id: String,
+
+        /// The URL to wrap (required in current alpha because URLs are not persisted yet)
+        #[arg(short, long)]
+        url: String,
+
+        /// Optional new display name (defaults to current desktop entry name or the ID)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Optional path to a custom icon (PNG format is recommended)
+        #[arg(short, long)]
+        icon: Option<String>,
+
+        /// Launch the application in fullscreen (Kiosk) mode
+        #[arg(short, long)]
+        fullscreen: bool,
+
+        /// Disable native window decorations (frameless window)
+        #[arg(long)]
+        no_decorations: bool,
+
+        /// Set a custom User-Agent string for the webview
+        #[arg(short = 'A', long)]
+        user_agent: Option<String>,
+
+        /// Set the initial window width
+        #[arg(short = 'W', long)]
+        width: Option<f64>,
+
+        /// Set the initial window height
+        #[arg(short = 'H', long)]
+        height: Option<f64>,
+
+        /// Force the webview into Dark Mode
+        #[arg(short, long)]
+        dark_mode: bool,
+
+        /// Show planned update actions without rebuilding/installing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Print the generated Tauri config JSON for the updated app and exit
+        #[arg(long)]
+        print_config: bool,
     },
 }
 
@@ -91,6 +163,79 @@ fn validate_remove_id(id: &str) -> Result<()> {
     }
 }
 
+fn build_tauri_config_value(args: &BuildArgs, safe_identifier: &str, bundle_active: bool) -> Value {
+    let mut window_config = Map::<String, Value>::new();
+    window_config.insert("title".to_string(), json!(args.name));
+    window_config.insert("url".to_string(), json!(args.url));
+
+    if args.fullscreen {
+        window_config.insert("fullscreen".to_string(), json!(true));
+    }
+    if args.no_decorations {
+        window_config.insert("decorations".to_string(), json!(false));
+    }
+    if let Some(ua) = &args.user_agent {
+        window_config.insert("userAgent".to_string(), json!(ua));
+    }
+    if let Some(w) = args.width {
+        window_config.insert("width".to_string(), json!(w));
+    }
+    if let Some(h) = args.height {
+        window_config.insert("height".to_string(), json!(h));
+    }
+    if args.dark_mode {
+        window_config.insert("theme".to_string(), json!("Dark"));
+    }
+
+    json!({
+        "$schema": "https://schema.tauri.app/config/2",
+        "productName": args.name,
+        "version": "0.1.0",
+        "identifier": format!("com.deskify.{}", safe_identifier),
+        "build": {
+            "frontendDist": "dist"
+        },
+        "app": {
+            "windows": [Value::Object(window_config)],
+            "security": { "csp": null }
+        },
+        "bundle": {
+            "active": bundle_active,
+            "targets": "all",
+            "icon": ["icons/icon.png"]
+        }
+    })
+}
+
+fn print_generated_config(args: &BuildArgs) -> Result<()> {
+    let safe_identifier = sanitize_app_id(&args.name);
+    let config = build_tauri_config_value(args, &safe_identifier, false);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&config).context("Failed to serialize generated config")?
+    );
+    Ok(())
+}
+
+fn print_build_plan(action: &str, args: &BuildArgs, existing_id: Option<&str>) {
+    let safe_name = sanitize_app_id(&args.name);
+    println!("{} plan:", action);
+    if let Some(id) = existing_id {
+        println!("- Existing app ID: {}", id);
+    }
+    println!("- URL: {}", args.url);
+    println!("- Name: {}", args.name);
+    println!("- New internal ID: {}", safe_name);
+    println!("- Local build: cargo tauri build (temporary generated project)");
+    println!("- Install targets: local binary + XDG icon + .desktop entry");
+    if args.fullscreen {
+        println!("- Window: fullscreen enabled");
+    }
+    if args.no_decorations {
+        println!("- Window: native decorations disabled");
+    }
+}
+
 fn is_deskify_desktop_entry(content: &str) -> bool {
     content.contains("X-Deskify-Managed=true")
         || (content.contains("Categories=Network;WebBrowser;")
@@ -105,6 +250,65 @@ fn write_rgba_png(img: DynamicImage, output_path: &Path) -> Result<()> {
         .save_with_format(output_path, ImageFormat::Png)
         .with_context(|| format!("Failed to write RGBA PNG icon to {}", output_path.display()))?;
     Ok(())
+}
+
+fn download_icon_from_url(icon_url: &str, output_path: &Path) -> Result<bool> {
+    let response = match ureq::get(icon_url).call() {
+        Ok(resp) => resp,
+        Err(_) => return Ok(false),
+    };
+    let mut bytes = Vec::new();
+    if response.into_reader().read_to_end(&mut bytes).is_err() || bytes.is_empty() {
+        return Ok(false);
+    }
+    let img = match image::load_from_memory(&bytes) {
+        Ok(img) => img,
+        Err(_) => return Ok(false),
+    };
+    write_rgba_png(img, output_path)?;
+    Ok(true)
+}
+
+fn extract_icon_candidates_from_html(base_url: &Url, html: &str) -> Vec<String> {
+    let link_re = Regex::new(r#"(?is)<link\s+[^>]*rel\s*=\s*["'][^"']*icon[^"']*["'][^>]*href\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+    let mut candidates = Vec::new();
+    for cap in link_re.captures_iter(html) {
+        if let Some(href) = cap.get(1)
+            && let Ok(joined) = base_url.join(href.as_str())
+        {
+            let candidate = joined.to_string();
+            if !candidates.contains(&candidate) {
+                candidates.push(candidate);
+            }
+        }
+    }
+    candidates
+}
+
+fn try_download_site_icon(website_url: &str, output_path: &Path) -> Result<bool> {
+    let base_url = match Url::parse(website_url) {
+        Ok(url) => url,
+        Err(_) => return Ok(false),
+    };
+
+    let mut html = String::new();
+    if let Ok(response) = ureq::get(website_url).call()
+        && response.into_reader().read_to_string(&mut html).is_ok()
+    {
+        for icon_url in extract_icon_candidates_from_html(&base_url, &html) {
+            if download_icon_from_url(&icon_url, output_path)? {
+                return Ok(true);
+            }
+        }
+    }
+
+    if let Ok(favicon_url) = base_url.join("/favicon.ico")
+        && download_icon_from_url(favicon_url.as_str(), output_path)?
+    {
+        return Ok(true);
+    }
+
+    Ok(false)
 }
 
 fn fetch_or_create_icon(
@@ -126,23 +330,17 @@ fn fetch_or_create_icon(
         }
     }
 
+    if try_download_site_icon(website_url, output_path)? {
+        return Ok(());
+    }
+
     if let Ok(parsed_url) = Url::parse(website_url)
         && let Some(host) = parsed_url.host_str()
     {
-        println!("Downloading icon for {}...", host);
+        println!("Falling back to Google favicon API for {}...", host);
         let api_url = format!("https://www.google.com/s2/favicons?domain={}&sz=128", host);
-        if let Ok(response) = ureq::get(&api_url).call() {
-            let mut bytes = Vec::new();
-            if response.into_reader().read_to_end(&mut bytes).is_ok() && !bytes.is_empty() {
-                if let Ok(img) = image::load_from_memory(&bytes) {
-                    write_rgba_png(img, output_path)?;
-                    return Ok(());
-                } else {
-                    eprintln!(
-                        "Warning: Downloaded favicon could not be decoded as an image, falling back to dummy icon."
-                    );
-                }
-            }
+        if download_icon_from_url(&api_url, output_path)? {
+            return Ok(());
         }
     }
 
@@ -159,19 +357,7 @@ fn fetch_or_create_icon(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn generate_project(
-    url: &str,
-    name: &str,
-    icon: Option<&String>,
-    fullscreen: bool,
-    no_decorations: bool,
-    user_agent: Option<&String>,
-    width: Option<f64>,
-    height: Option<f64>,
-    dark_mode: bool,
-    project_dir: &Path,
-) -> Result<()> {
+fn generate_project(args: &BuildArgs, project_dir: &Path) -> Result<()> {
     let src_dir = project_dir.join("src");
     fs::create_dir_all(&src_dir).context("Failed to create src directory")?;
 
@@ -216,7 +402,7 @@ fn main() {
     fs::write(src_dir.join("main.rs"), main_rs).context("Failed to write src/main.rs")?;
 
     // 4. tauri.conf.json
-    let safe_identifier = sanitize_app_id(name);
+    let safe_identifier = sanitize_app_id(&args.name);
 
     let dist_dir = project_dir.join("dist");
     fs::create_dir_all(&dist_dir).context("Failed to create dist directory")?;
@@ -229,51 +415,9 @@ fn main() {
     let icons_dir = project_dir.join("icons");
     fs::create_dir_all(&icons_dir).context("Failed to create icons directory")?;
 
-    fetch_or_create_icon(url, icon, &icons_dir.join("icon.png"))?;
+    fetch_or_create_icon(&args.url, args.icon.as_ref(), &icons_dir.join("icon.png"))?;
 
-    let mut window_config = Map::<String, Value>::new();
-    window_config.insert("title".to_string(), json!(name));
-    window_config.insert("url".to_string(), json!(url));
-
-    if fullscreen {
-        window_config.insert("fullscreen".to_string(), json!(true));
-    }
-    if no_decorations {
-        window_config.insert("decorations".to_string(), json!(false));
-    }
-    if let Some(ua) = user_agent {
-        window_config.insert("userAgent".to_string(), json!(ua));
-    }
-    if let Some(w) = width {
-        window_config.insert("width".to_string(), json!(w));
-    }
-    if let Some(h) = height {
-        window_config.insert("height".to_string(), json!(h));
-    }
-    if dark_mode {
-        window_config.insert("theme".to_string(), json!("Dark"));
-    }
-
-    let tauri_conf = json!({
-        "$schema": "https://schema.tauri.app/config/2",
-        "productName": name,
-        "version": "0.1.0",
-        "identifier": format!("com.deskify.{}", safe_identifier),
-        "build": {
-            "frontendDist": "dist"
-        },
-        "app": {
-            "windows": [Value::Object(window_config)],
-            "security": {
-                "csp": null
-            }
-        },
-        "bundle": {
-            "active": false,
-            "targets": "all",
-            "icon": ["icons/icon.png"]
-        }
-    });
+    let tauri_conf = build_tauri_config_value(args, &safe_identifier, false);
     fs::write(
         project_dir.join("tauri.conf.json"),
         serde_json::to_string_pretty(&tauri_conf).context("Failed to serialize tauri.conf.json")?,
@@ -429,6 +573,107 @@ fn list_apps() -> Result<()> {
     Ok(())
 }
 
+fn read_installed_app_display_name(id: &str) -> Result<Option<String>> {
+    validate_remove_id(id)?;
+    let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
+    let desktop_path = base_dirs
+        .data_local_dir()
+        .join("applications")
+        .join(format!("{}.desktop", id));
+    if !desktop_path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&desktop_path)
+        .with_context(|| format!("Failed to read desktop entry {}", desktop_path.display()))?;
+    if !is_deskify_desktop_entry(&content) {
+        return Ok(None);
+    }
+    let name = content
+        .lines()
+        .find(|line| line.starts_with("Name="))
+        .and_then(|line| line.strip_prefix("Name="))
+        .map(str::to_string);
+    Ok(name)
+}
+
+fn run_doctor() -> Result<()> {
+    let mut failed = false;
+
+    let checks = vec![
+        ("cargo", vec!["--version"], true),
+        ("rustc", vec!["--version"], true),
+        ("pkg-config", vec!["--version"], false),
+    ];
+
+    println!("Deskify doctor");
+    println!("-------------");
+
+    for (cmd, args, critical) in checks {
+        match Command::new(cmd).args(args).output() {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                println!("[ok] {} {}", cmd, version);
+            }
+            _ => {
+                println!(
+                    "[{}] {} not found or failed",
+                    if critical { "fail" } else { "warn" },
+                    cmd
+                );
+                if critical {
+                    failed = true;
+                }
+            }
+        }
+    }
+
+    match Command::new("cargo").args(["tauri", "--version"]).output() {
+        Ok(output) if output.status.success() => {
+            println!("[ok] {}", String::from_utf8_lossy(&output.stdout).trim());
+        }
+        _ => {
+            println!(
+                "[fail] cargo tauri not available (install with: cargo install tauri-cli --version \"^2.0.0\")"
+            );
+            failed = true;
+        }
+    }
+
+    if let Ok(output) = Command::new("pkg-config")
+        .args(["--modversion", "webkit2gtk-4.1"])
+        .output()
+    {
+        if output.status.success() {
+            println!(
+                "[ok] webkit2gtk-4.1 {}",
+                String::from_utf8_lossy(&output.stdout).trim()
+            );
+        } else {
+            println!("[warn] webkit2gtk-4.1 not found via pkg-config");
+        }
+    }
+
+    let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
+    let executable_dir = base_dirs
+        .executable_dir()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| base_dirs.home_dir().join(".local/bin"));
+    let applications_dir = base_dirs.data_local_dir().join("applications");
+    let icons_dir = base_dirs
+        .data_local_dir()
+        .join("icons/hicolor/128x128/apps");
+    println!("[info] executable dir: {}", executable_dir.display());
+    println!("[info] applications dir: {}", applications_dir.display());
+    println!("[info] icons dir: {}", icons_dir.display());
+
+    if failed {
+        Err(anyhow!("Doctor found critical issues"))
+    } else {
+        println!("Doctor completed: no critical issues detected.");
+        Ok(())
+    }
+}
+
 fn remove_app(safe_name: &str) -> Result<()> {
     validate_remove_id(safe_name)?;
 
@@ -475,6 +720,59 @@ fn remove_app(safe_name: &str) -> Result<()> {
     Ok(())
 }
 
+fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<()> {
+    if print_config {
+        print_generated_config(args)?;
+        return Ok(());
+    }
+    if dry_run {
+        print_build_plan("Build", args, None);
+        return Ok(());
+    }
+
+    println!(
+        "Generating native app '{}' for URL: {}",
+        args.name, args.url
+    );
+
+    let dir = tempdir().context("Failed to create temporary directory for building")?;
+    println!("Scaffolding Tauri project in {:?}", dir.path());
+
+    generate_project(args, dir.path())?;
+
+    let bin_path = match build_project(dir.path()) {
+        Ok(path) => path,
+        Err(e) => {
+            let _ = dir.keep();
+            return Err(e.context("Project architecture failed to compile"));
+        }
+    };
+
+    install_app(&args.name, &bin_path, dir.path())?;
+    Ok(())
+}
+
+fn execute_update(id: &str, args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<()> {
+    validate_remove_id(id)?;
+
+    if print_config {
+        print_generated_config(args)?;
+        return Ok(());
+    }
+    if dry_run {
+        print_build_plan("Update", args, Some(id));
+        println!(
+            "- Update action: remove existing app '{}' and reinstall",
+            id
+        );
+        return Ok(());
+    }
+
+    println!("Updating app '{}' -> '{}' ({})", id, args.name, args.url);
+    remove_app(id)?;
+    execute_build(args, false, false)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -489,40 +787,62 @@ fn main() -> Result<()> {
             width,
             height,
             dark_mode,
+            print_config,
+            dry_run,
         } => {
-            println!("Generating native app '{}' for URL: {}", name, url);
-
-            let dir = tempdir().context("Failed to create temporary directory for building")?;
-            println!("Scaffolding Tauri project in {:?}", dir.path());
-
-            generate_project(
-                &url,
-                &name,
-                icon.as_ref(),
+            let args = BuildArgs {
+                url,
+                name,
+                icon,
                 fullscreen,
                 no_decorations,
-                user_agent.as_ref(),
+                user_agent,
                 width,
                 height,
                 dark_mode,
-                dir.path(),
-            )?;
-
-            let bin_path = match build_project(dir.path()) {
-                Ok(path) => path,
-                Err(e) => {
-                    let _ = dir.keep();
-                    return Err(e.context("Project architecture failed to compile"));
-                }
             };
-
-            install_app(&name, &bin_path, dir.path())?;
+            execute_build(&args, dry_run, print_config)?;
         }
         Commands::List => {
             list_apps()?;
         }
+        Commands::Doctor => {
+            run_doctor()?;
+        }
         Commands::Remove { id } => {
             remove_app(&id)?;
+        }
+        Commands::Update {
+            id,
+            url,
+            name,
+            icon,
+            fullscreen,
+            no_decorations,
+            user_agent,
+            width,
+            height,
+            dark_mode,
+            dry_run,
+            print_config,
+        } => {
+            let resolved_name = if let Some(name) = name {
+                name
+            } else {
+                read_installed_app_display_name(&id)?.unwrap_or_else(|| id.clone())
+            };
+            let args = BuildArgs {
+                url,
+                name: resolved_name,
+                icon,
+                fullscreen,
+                no_decorations,
+                user_agent,
+                width,
+                height,
+                dark_mode,
+            };
+            execute_update(&id, &args, dry_run, print_config)?;
         }
     }
 
