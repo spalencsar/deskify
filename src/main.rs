@@ -403,50 +403,6 @@ fn list_apps() -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{is_deskify_desktop_entry, sanitize_app_id, validate_remove_id};
-
-    #[test]
-    fn sanitize_app_id_replaces_spaces_and_strips_symbols() {
-        assert_eq!(sanitize_app_id("Chat GPT!"), "chat-gpt");
-    }
-
-    #[test]
-    fn sanitize_app_id_falls_back_to_app_for_empty_result() {
-        assert_eq!(sanitize_app_id("!!!"), "app");
-    }
-
-    #[test]
-    fn validate_remove_id_accepts_safe_id() {
-        assert!(validate_remove_id("chatgpt").is_ok());
-    }
-
-    #[test]
-    fn validate_remove_id_rejects_path_traversal() {
-        assert!(validate_remove_id("../x").is_err());
-    }
-
-    #[test]
-    fn desktop_entry_detection_accepts_marker() {
-        let content = "[Desktop Entry]\nName=ChatGPT\nX-Deskify-Managed=true\n";
-        assert!(is_deskify_desktop_entry(content));
-    }
-
-    #[test]
-    fn desktop_entry_detection_accepts_legacy_entries() {
-        let content =
-            "[Desktop Entry]\nExec=/home/user/.local/bin/chatgpt\nCategories=Network;WebBrowser;\n";
-        assert!(is_deskify_desktop_entry(content));
-    }
-
-    #[test]
-    fn desktop_entry_detection_rejects_unrelated_entries() {
-        let content = "[Desktop Entry]\nExec=/usr/bin/firefox\nCategories=Network;WebBrowser;\n";
-        assert!(!is_deskify_desktop_entry(content));
-    }
-}
-
 fn remove_app(safe_name: &str) -> Result<()> {
     validate_remove_id(safe_name)?;
 
@@ -543,4 +499,48 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_deskify_desktop_entry, sanitize_app_id, validate_remove_id};
+
+    #[test]
+    fn sanitize_app_id_replaces_spaces_and_strips_symbols() {
+        assert_eq!(sanitize_app_id("Chat GPT!"), "chat-gpt");
+    }
+
+    #[test]
+    fn sanitize_app_id_falls_back_to_app_for_empty_result() {
+        assert_eq!(sanitize_app_id("!!!"), "app");
+    }
+
+    #[test]
+    fn validate_remove_id_accepts_safe_id() {
+        assert!(validate_remove_id("chatgpt").is_ok());
+    }
+
+    #[test]
+    fn validate_remove_id_rejects_path_traversal() {
+        assert!(validate_remove_id("../x").is_err());
+    }
+
+    #[test]
+    fn desktop_entry_detection_accepts_marker() {
+        let content = "[Desktop Entry]\nName=ChatGPT\nX-Deskify-Managed=true\n";
+        assert!(is_deskify_desktop_entry(content));
+    }
+
+    #[test]
+    fn desktop_entry_detection_accepts_legacy_entries() {
+        let content =
+            "[Desktop Entry]\nExec=/home/user/.local/bin/chatgpt\nCategories=Network;WebBrowser;\n";
+        assert!(is_deskify_desktop_entry(content));
+    }
+
+    #[test]
+    fn desktop_entry_detection_rejects_unrelated_entries() {
+        let content = "[Desktop Entry]\nExec=/usr/bin/firefox\nCategories=Network;WebBrowser;\n";
+        assert!(!is_deskify_desktop_entry(content));
+    }
 }
