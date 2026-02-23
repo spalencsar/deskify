@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish to AUR (e.g. v0.1.0-alpha.8)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,9 +29,11 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Generate PKGBUILD (deskify-bin)
-        run: bash packaging/generate-pkgbuild-bin.sh "${GITHUB_REF_NAME}"
+        run: bash packaging/generate-pkgbuild-bin.sh "${{ inputs.tag || github.ref_name }}"
 
       - name: Generate .SRCINFO
         run: |
@@ -74,5 +82,5 @@ jobs:
           fi
 
           git add PKGBUILD .SRCINFO
-          git commit -m "Update deskify-bin to ${GITHUB_REF_NAME}"
+          git commit -m "Update deskify-bin to ${{ inputs.tag || github.ref_name }}"
           git push
