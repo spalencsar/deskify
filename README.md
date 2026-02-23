@@ -115,7 +115,7 @@ flowchart TD
     A --> C[App config files]
     A --> D[Icons + .desktop entries]
     C --> E[apps/chatgpt.json]
-    C --> F[apps/netflix.json]
+    C --> F[apps/home-assistant.json]
     B --> G[Load app config at launch]
     G --> H[Open site in system webview]
     D --> I[Linux app menu integration]
@@ -213,8 +213,8 @@ Once the build finishes, `ChatGPT` will instantly appear in your system Applicat
 #### Advanced Build Options
 ```bash
 deskify build \
-  --url "https://netflix.com" \
-  --name "Netflix" \
+  --url "https://web.whatsapp.com" \
+  --name "WhatsApp" \
   --fullscreen \
   --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36" \
   --dark-mode \
@@ -264,7 +264,7 @@ deskify list
 ```text
 Installed Deskify Apps:
 - ChatGPT (Internal ID: chatgpt)
-- Netflix (Internal ID: netflix)
+- Home Assistant (Internal ID: home-assistant)
 ```
 
 To entirely uninstall an app (including the binary, desktop entry, and icons):
