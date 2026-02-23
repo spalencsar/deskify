@@ -221,6 +221,11 @@ Deskify supports two backend modes:
 
 If a site does not work in the default `tauri` backend, try `--backend chromium`.
 
+Quick decision rule:
+
+- Start with the default `tauri` backend for small wrappers and native Linux integration.
+- If the site fails to load, behaves incorrectly, or needs a newer browser engine, rebuild/update with `--backend chromium`.
+
 #### Advanced Build Options
 ```bash
 deskify build \
@@ -335,6 +340,12 @@ You can also preview an update:
 ```bash
 deskify update chat --url "https://chat.com" --dry-run
 deskify update chat --url "https://chat.com" --print-config
+```
+
+Switch an existing app to Chromium compatibility mode while keeping the same internal ID:
+
+```bash
+deskify update chat --url "https://chat.com" --name "Chat" --backend chromium
 ```
 
 ### Diagnostics (`doctor`)
