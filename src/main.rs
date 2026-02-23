@@ -39,6 +39,10 @@ enum Commands {
         #[arg(short, long)]
         fullscreen: bool,
 
+        /// Disable native window decorations (frameless window)
+        #[arg(long)]
+        no_decorations: bool,
+
         /// Set a custom User-Agent string for the webview
         #[arg(short = 'A', long)]
         user_agent: Option<String>,
@@ -161,6 +165,7 @@ fn generate_project(
     name: &str,
     icon: Option<&String>,
     fullscreen: bool,
+    no_decorations: bool,
     user_agent: Option<&String>,
     width: Option<f64>,
     height: Option<f64>,
@@ -232,6 +237,9 @@ fn main() {
 
     if fullscreen {
         window_config.insert("fullscreen".to_string(), json!(true));
+    }
+    if no_decorations {
+        window_config.insert("decorations".to_string(), json!(false));
     }
     if let Some(ua) = user_agent {
         window_config.insert("userAgent".to_string(), json!(ua));
@@ -476,6 +484,7 @@ fn main() -> Result<()> {
             name,
             icon,
             fullscreen,
+            no_decorations,
             user_agent,
             width,
             height,
@@ -491,6 +500,7 @@ fn main() -> Result<()> {
                 &name,
                 icon.as_ref(),
                 fullscreen,
+                no_decorations,
                 user_agent.as_ref(),
                 width,
                 height,

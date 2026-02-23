@@ -12,6 +12,17 @@
   <img src="https://img.shields.io/badge/Status-Alpha-yellow?style=flat-square" alt="Alpha status" />
 </p>
 
+<p align="center">
+  <img src="docs/assets/chat-kde.png" alt="Deskify app window running chat.com on KDE Plasma" width="49%" />
+  <img src="docs/assets/chat-launcher-kde.png" alt="Deskify app visible in KDE launcher" width="49%" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/deskify-list-terminal.png" alt="deskify list terminal output" width="80%" />
+</p>
+
+<p align="center"><sub>Screenshots: KDE Plasma on Arch Linux (alpha MVP workflow).</sub></p>
+
 ---
 
 ## Why Deskify Exists
@@ -204,6 +215,7 @@ deskify build \
   --url "https://netflix.com" \
   --name "Netflix" \
   --fullscreen \
+  --no-decorations \
   --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36" \
   --dark-mode \
   --width 1280 \
@@ -212,6 +224,7 @@ deskify build \
 
 * `--icon <PATH>`: Provide a custom PNG icon instead of auto-downloading one.
 * `--fullscreen`: Starts the app in Kiosk mode.
+* `--no-decorations`: Disables native window decorations (frameless window; useful for dashboards/kiosk setups).
 * `--user-agent <UA>`: Useful to bypass webview restrictions on certain platforms.
 * `--dark-mode`: Forces the Tauri webview into a dark theme.
 * `--width <PX>` / `--height <PX>`: Sets the startup resolution.
