@@ -4,6 +4,7 @@ use directories::BaseDirs;
 use image::{DynamicImage, ImageFormat};
 use regex::Regex;
 use serde_json::{Map, Value, json};
+use std::env;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -11,10 +12,23 @@ use std::process::Command;
 use tempfile::tempdir;
 use url::Url;
 
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+enum Backend {
+    Tauri,
+    Chromium,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+enum ProfileScope {
+    Isolated,
+    Shared,
+}
+
 #[derive(Debug, Clone)]
 struct BuildArgs {
     url: String,
     name: String,
+    internal_id: String,
     icon: Option<String>,
     fullscreen: bool,
     no_decorations: bool,
@@ -22,6 +36,9 @@ struct BuildArgs {
     width: Option<f64>,
     height: Option<f64>,
     dark_mode: bool,
+    backend: Backend,
+    browser_bin: Option<String>,
+    profile_scope: ProfileScope,
 }
 
 /// Deskify - Turn any URL into a native Linux desktop application using Tauri.
@@ -71,6 +88,18 @@ enum Commands {
         /// Force the webview into Dark Mode
         #[arg(short, long)]
         dark_mode: bool,
+
+        /// Backend to use for the generated app
+        #[arg(long, value_enum, default_value_t = Backend::Tauri)]
+        backend: Backend,
+
+        /// Path to a Chromium-based browser binary (only for `--backend chromium`)
+        #[arg(long)]
+        browser_bin: Option<String>,
+
+        /// Profile isolation for Chromium backend (only for `--backend chromium`)
+        #[arg(long, value_enum, default_value_t = ProfileScope::Isolated)]
+        profile_scope: ProfileScope,
 
         /// Print the generated Tauri config JSON and exit
         #[arg(long)]
@@ -130,6 +159,18 @@ enum Commands {
         #[arg(short, long)]
         dark_mode: bool,
 
+        /// Backend to use for the updated app
+        #[arg(long, value_enum, default_value_t = Backend::Tauri)]
+        backend: Backend,
+
+        /// Path to a Chromium-based browser binary (only for `--backend chromium`)
+        #[arg(long)]
+        browser_bin: Option<String>,
+
+        /// Profile isolation for Chromium backend (only for `--backend chromium`)
+        #[arg(long, value_enum, default_value_t = ProfileScope::Isolated)]
+        profile_scope: ProfileScope,
+
         /// Show planned update actions without rebuilding/installing
         #[arg(long)]
         dry_run: bool,
@@ -160,6 +201,13 @@ fn validate_remove_id(id: &str) -> Result<()> {
             "Invalid app ID '{}'. Allowed characters: lowercase letters, numbers, and '-'.",
             id
         ))
+    }
+}
+
+fn profile_scope_str(scope: ProfileScope) -> &'static str {
+    match scope {
+        ProfileScope::Isolated => "isolated",
+        ProfileScope::Shared => "shared",
     }
 }
 
@@ -207,27 +255,188 @@ fn build_tauri_config_value(args: &BuildArgs, safe_identifier: &str, bundle_acti
     })
 }
 
+fn desktop_exec_escape(arg: &str) -> String {
+    if arg.is_empty() {
+        return "\"\"".to_string();
+    }
+
+    let needs_quotes = arg
+        .chars()
+        .any(|c| c.is_whitespace() || c == '"' || c == '\\');
+    if !needs_quotes {
+        return arg.to_string();
+    }
+
+    let escaped = arg.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{}\"", escaped)
+}
+
+fn desktop_exec_join(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| desktop_exec_escape(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn chromium_candidates() -> &'static [&'static str] {
+    &[
+        "google-chrome",
+        "chromium",
+        "chromium-browser",
+        "brave-browser",
+        "vivaldi",
+        "microsoft-edge",
+    ]
+}
+
+fn find_binary_in_path(name: &str) -> Option<PathBuf> {
+    let path_var = env::var_os("PATH")?;
+    for dir in env::split_paths(&path_var) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn resolve_chromium_binary(explicit: Option<&str>) -> Result<PathBuf> {
+    if let Some(path) = explicit {
+        let candidate = PathBuf::from(path);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+        return Err(anyhow!(
+            "Specified browser binary does not exist or is not a file: {}",
+            candidate.display()
+        ));
+    }
+
+    for candidate in chromium_candidates() {
+        if let Some(path) = find_binary_in_path(candidate) {
+            return Ok(path);
+        }
+    }
+
+    Err(anyhow!(
+        "No Chromium-based browser found in PATH. Install Chromium/Chrome/Brave or use --browser-bin /path/to/browser."
+    ))
+}
+
+fn chromium_profile_dir(internal_id: &str) -> Result<PathBuf> {
+    validate_remove_id(internal_id)?;
+    let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
+    Ok(base_dirs
+        .data_local_dir()
+        .join("deskify")
+        .join("profiles")
+        .join(internal_id))
+}
+
+fn chromium_window_size_arg(width: Option<f64>, height: Option<f64>) -> Option<String> {
+    match (width, height) {
+        (Some(w), Some(h)) => Some(format!("--window-size={},{}", w as i64, h as i64)),
+        _ => None,
+    }
+}
+
+fn build_chromium_exec(
+    args: &BuildArgs,
+    browser_path: &Path,
+    profile_dir: Option<&Path>,
+) -> String {
+    let mut parts = vec![browser_path.display().to_string()];
+    parts.push("--no-first-run".to_string());
+    parts.push("--no-default-browser-check".to_string());
+    parts.push(format!("--class={}", args.internal_id));
+    parts.push(format!("--app={}", args.url));
+
+    if let Some(profile_dir) = profile_dir {
+        parts.push(format!("--user-data-dir={}", profile_dir.display()));
+    }
+    if args.fullscreen {
+        parts.push("--start-fullscreen".to_string());
+    }
+    if let Some(window_size) = chromium_window_size_arg(args.width, args.height) {
+        parts.push(window_size);
+    }
+    if let Some(user_agent) = &args.user_agent {
+        parts.push(format!("--user-agent={}", user_agent));
+    }
+    if args.dark_mode {
+        parts.push("--force-dark-mode".to_string());
+    }
+
+    desktop_exec_join(&parts)
+}
+
 fn print_generated_config(args: &BuildArgs) -> Result<()> {
-    let safe_identifier = sanitize_app_id(&args.name);
-    let config = build_tauri_config_value(args, &safe_identifier, false);
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&config).context("Failed to serialize generated config")?
-    );
+    match args.backend {
+        Backend::Tauri => {
+            let config = build_tauri_config_value(args, &args.internal_id, false);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&config)
+                    .context("Failed to serialize generated config")?
+            );
+        }
+        Backend::Chromium => {
+            let browser = resolve_chromium_binary(args.browser_bin.as_deref())?;
+            let profile_dir = chromium_profile_dir(&args.internal_id)?;
+            let profile_dir = match args.profile_scope {
+                ProfileScope::Isolated => Some(profile_dir),
+                ProfileScope::Shared => None,
+            };
+            let exec = build_chromium_exec(args, &browser, profile_dir.as_deref());
+            let value = json!({
+                "backend": "chromium",
+                "name": args.name,
+                "id": args.internal_id,
+                "url": args.url,
+                "browser": browser.display().to_string(),
+                "profileScope": profile_scope_str(args.profile_scope),
+                "exec": exec,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value)
+                    .context("Failed to serialize generated config")?
+            );
+        }
+    }
     Ok(())
 }
 
 fn print_build_plan(action: &str, args: &BuildArgs, existing_id: Option<&str>) {
-    let safe_name = sanitize_app_id(&args.name);
+    let id = existing_id.unwrap_or(&args.internal_id);
     println!("{} plan:", action);
     if let Some(id) = existing_id {
         println!("- Existing app ID: {}", id);
     }
     println!("- URL: {}", args.url);
     println!("- Name: {}", args.name);
-    println!("- New internal ID: {}", safe_name);
-    println!("- Local build: cargo tauri build (temporary generated project)");
-    println!("- Install targets: local binary + XDG icon + .desktop entry");
+    println!("- Internal ID: {}", id);
+    match args.backend {
+        Backend::Tauri => {
+            println!("- Backend: tauri (system WebView)");
+            println!("- Local build: cargo tauri build (temporary generated project)");
+            println!("- Install targets: local binary + XDG icon + .desktop entry");
+        }
+        Backend::Chromium => {
+            println!("- Backend: chromium (installed browser runtime)");
+            println!("- Local build: none");
+            println!("- Install targets: XDG icon + .desktop entry (+ optional isolated profile)");
+            println!("- Profile scope: {}", profile_scope_str(args.profile_scope));
+            if let Some(path) = &args.browser_bin {
+                println!("- Browser binary: {}", path);
+            } else {
+                println!("- Browser binary: auto-detect from PATH");
+            }
+            if args.no_decorations {
+                println!("- Note: --no-decorations is not guaranteed in Chromium app mode");
+            }
+        }
+    }
     if args.fullscreen {
         println!("- Window: fullscreen enabled");
     }
@@ -402,8 +611,6 @@ fn main() {
     fs::write(src_dir.join("main.rs"), main_rs).context("Failed to write src/main.rs")?;
 
     // 4. tauri.conf.json
-    let safe_identifier = sanitize_app_id(&args.name);
-
     let dist_dir = project_dir.join("dist");
     fs::create_dir_all(&dist_dir).context("Failed to create dist directory")?;
     fs::write(
@@ -417,7 +624,7 @@ fn main() {
 
     fetch_or_create_icon(&args.url, args.icon.as_ref(), &icons_dir.join("icon.png"))?;
 
-    let tauri_conf = build_tauri_config_value(args, &safe_identifier, false);
+    let tauri_conf = build_tauri_config_value(args, &args.internal_id, false);
     fs::write(
         project_dir.join("tauri.conf.json"),
         serde_json::to_string_pretty(&tauri_conf).context("Failed to serialize tauri.conf.json")?,
@@ -466,9 +673,7 @@ fn build_project(project_dir: &Path) -> Result<PathBuf> {
     }
 }
 
-fn install_app(name: &str, bin_path: &Path, project_dir: &Path) -> Result<()> {
-    let safe_name = sanitize_app_id(name);
-
+fn desktop_paths(internal_id: &str) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf)> {
     let base_dirs =
         BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs (e.g. $HOME)"))?;
     let data_local_dir = base_dirs.data_local_dir(); // Usually ~/.local/share
@@ -480,23 +685,46 @@ fn install_app(name: &str, bin_path: &Path, project_dir: &Path) -> Result<()> {
             base_dirs.home_dir().join(".local/bin")
         });
 
+    let applications_dir = data_local_dir.join("applications");
+    let icon_dir = data_local_dir.join("icons/hicolor/128x128/apps");
+    let target_bin = executable_dir.join(internal_id);
+    let target_icon = icon_dir.join(format!("{}.png", internal_id));
+    let desktop_file_path = applications_dir.join(format!("{}.desktop", internal_id));
+
+    Ok((
+        target_bin,
+        target_icon,
+        desktop_file_path,
+        data_local_dir.to_path_buf(),
+    ))
+}
+
+fn install_tauri_app(args: &BuildArgs, bin_path: &Path, project_dir: &Path) -> Result<()> {
+    let (target_bin, target_icon, desktop_file_path, _data_local_dir) =
+        desktop_paths(&args.internal_id)?;
+    let executable_dir = target_bin
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid executable target path"))?;
+    let icon_dir = target_icon
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid icon target path"))?;
+    let applications_dir = desktop_file_path
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid applications target path"))?;
+
     // 1. Move binary
-    fs::create_dir_all(&executable_dir).context("Failed to create ~/.local/bin directory")?;
-    let target_bin = executable_dir.join(&safe_name);
+    fs::create_dir_all(executable_dir).context("Failed to create ~/.local/bin directory")?;
     fs::copy(bin_path, &target_bin).context("Failed to move binary to installation directory")?;
 
     // 2. Install Icon
-    let icon_dir = data_local_dir.join("icons/hicolor/128x128/apps");
-    fs::create_dir_all(&icon_dir).context("Failed to create icons directory")?;
-    let target_icon = icon_dir.join(format!("{}.png", safe_name));
+    fs::create_dir_all(icon_dir).context("Failed to create icons directory")?;
     let source_icon = project_dir.join("icons/icon.png");
     if source_icon.exists() {
         let _ = fs::copy(&source_icon, &target_icon);
     }
 
     // 3. Create .desktop file
-    let applications_dir = data_local_dir.join("applications");
-    fs::create_dir_all(&applications_dir).context("Failed to create applications directory")?;
+    fs::create_dir_all(applications_dir).context("Failed to create applications directory")?;
 
     let desktop_entry = format!(
         r#"
@@ -510,19 +738,103 @@ Terminal=false
 Type=Application
 Categories=Network;WebBrowser;
 X-Deskify-Managed=true
+X-Deskify-Backend=tauri
 "#,
-        name,
+        args.name,
         target_bin.to_string_lossy(),
-        safe_name, // Icon name
-        safe_name  // Window class for wayland/x11 proper grouping
+        args.internal_id, // Icon name
+        args.internal_id  // Window class for wayland/x11 proper grouping
     );
 
-    let desktop_file_path = applications_dir.join(format!("{}.desktop", safe_name));
     fs::write(&desktop_file_path, desktop_entry.trim()).context("Failed to write .desktop file")?;
 
     println!("App successfully installed!");
-    println!("You can now launch '{}' from your application menu.", name);
+    println!(
+        "You can now launch '{}' from your application menu.",
+        args.name
+    );
 
+    Ok(())
+}
+
+fn install_chromium_app(args: &BuildArgs) -> Result<()> {
+    let browser = resolve_chromium_binary(args.browser_bin.as_deref())?;
+    let profile_dir = match args.profile_scope {
+        ProfileScope::Isolated => Some(chromium_profile_dir(&args.internal_id)?),
+        ProfileScope::Shared => None,
+    };
+
+    if matches!((args.width, args.height), (Some(_), None) | (None, Some(_))) {
+        eprintln!(
+            "Warning: Chromium backend requires both --width and --height for --window-size; ignoring partial size override."
+        );
+    }
+    if args.no_decorations {
+        eprintln!(
+            "Warning: --no-decorations is not reliably supported in Chromium app mode and may be ignored."
+        );
+    }
+
+    let (target_bin, target_icon, desktop_file_path, _data_local_dir) =
+        desktop_paths(&args.internal_id)?;
+    let icon_dir = target_icon
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid icon target path"))?;
+    let applications_dir = desktop_file_path
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid applications target path"))?;
+
+    fs::create_dir_all(icon_dir).context("Failed to create icons directory")?;
+    fs::create_dir_all(applications_dir).context("Failed to create applications directory")?;
+    if let Some(profile_dir) = &profile_dir {
+        fs::create_dir_all(profile_dir).context("Failed to create Chromium profile directory")?;
+    }
+
+    let temp = tempdir().context("Failed to create temporary directory for icon fetch")?;
+    let temp_icon = temp.path().join("icon.png");
+    fetch_or_create_icon(&args.url, args.icon.as_ref(), &temp_icon)?;
+    let _ = fs::copy(&temp_icon, &target_icon);
+
+    let exec = build_chromium_exec(args, &browser, profile_dir.as_deref());
+    let desktop_entry = format!(
+        r#"
+[Desktop Entry]
+Version=1.0
+Name={}
+Exec={}
+Icon={}
+StartupWMClass={}
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;
+X-Deskify-Managed=true
+X-Deskify-Backend=chromium
+X-Deskify-URL={}
+X-Deskify-ProfileScope={}
+X-Deskify-Browser={}
+"#,
+        args.name,
+        exec,
+        args.internal_id,
+        args.internal_id,
+        args.url,
+        profile_scope_str(args.profile_scope),
+        browser.display()
+    );
+    fs::write(&desktop_file_path, desktop_entry.trim()).context("Failed to write .desktop file")?;
+
+    if target_bin.exists() {
+        println!(
+            "Note: existing binary {} left in place (Chromium backend does not use it).",
+            target_bin.display()
+        );
+    }
+
+    println!("App successfully installed (Chromium backend)!");
+    println!(
+        "You can now launch '{}' from your application menu.",
+        args.name
+    );
     Ok(())
 }
 
@@ -549,18 +861,20 @@ fn list_apps() -> Result<()> {
                     .and_then(|l| l.strip_prefix("Name="))
                     .unwrap_or("Unknown");
 
-                let exec = content
+                let internal_id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Unknown");
+                let backend = content
                     .lines()
-                    .find(|l| l.starts_with("Exec="))
-                    .and_then(|l| l.strip_prefix("Exec="))
-                    .unwrap_or("Unknown");
+                    .find(|l| l.starts_with("X-Deskify-Backend="))
+                    .and_then(|l| l.strip_prefix("X-Deskify-Backend="))
+                    .unwrap_or("legacy");
 
-                let bin_name = Path::new(exec)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("Unknown");
-
-                println!("- {} (Internal ID: {})", name, bin_name);
+                println!(
+                    "- {} (Internal ID: {}, Backend: {})",
+                    name, internal_id, backend
+                );
                 found = true;
             }
         }
@@ -653,6 +967,11 @@ fn run_doctor() -> Result<()> {
         }
     }
 
+    match resolve_chromium_binary(None) {
+        Ok(path) => println!("[ok] chromium browser found: {}", path.display()),
+        Err(_) => println!("[warn] no chromium-based browser found in PATH"),
+    }
+
     let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
     let executable_dir = base_dirs
         .executable_dir()
@@ -675,6 +994,10 @@ fn run_doctor() -> Result<()> {
 }
 
 fn remove_app(safe_name: &str) -> Result<()> {
+    remove_app_with_options(safe_name, true)
+}
+
+fn remove_app_with_options(safe_name: &str, remove_profile: bool) -> Result<()> {
     validate_remove_id(safe_name)?;
 
     let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
@@ -716,6 +1039,19 @@ fn remove_app(safe_name: &str) -> Result<()> {
         println!("Icon not found: {:?}", icon_path);
     }
 
+    // 4. Remove Chromium profile (optional)
+    let profile_path = data_local_dir.join("deskify/profiles").join(safe_name);
+    if remove_profile {
+        if profile_path.exists() {
+            fs::remove_dir_all(&profile_path).context("Failed to remove Chromium profile")?;
+            println!("Removed Chromium profile: {:?}", profile_path);
+        } else {
+            println!("Chromium profile not found: {:?}", profile_path);
+        }
+    } else if profile_path.exists() {
+        println!("Keeping Chromium profile: {:?}", profile_path);
+    }
+
     println!("Successfully removed app '{}'.", safe_name);
     Ok(())
 }
@@ -730,26 +1066,37 @@ fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<
         return Ok(());
     }
 
-    println!(
-        "Generating native app '{}' for URL: {}",
-        args.name, args.url
-    );
+    match args.backend {
+        Backend::Tauri => {
+            println!(
+                "Generating native app '{}' for URL: {}",
+                args.name, args.url
+            );
 
-    let dir = tempdir().context("Failed to create temporary directory for building")?;
-    println!("Scaffolding Tauri project in {:?}", dir.path());
+            let dir = tempdir().context("Failed to create temporary directory for building")?;
+            println!("Scaffolding Tauri project in {:?}", dir.path());
 
-    generate_project(args, dir.path())?;
+            generate_project(args, dir.path())?;
 
-    let bin_path = match build_project(dir.path()) {
-        Ok(path) => path,
-        Err(e) => {
-            let _ = dir.keep();
-            return Err(e.context("Project architecture failed to compile"));
+            let bin_path = match build_project(dir.path()) {
+                Ok(path) => path,
+                Err(e) => {
+                    let _ = dir.keep();
+                    return Err(e.context("Project architecture failed to compile"));
+                }
+            };
+
+            install_tauri_app(args, &bin_path, dir.path())?;
+            Ok(())
         }
-    };
-
-    install_app(&args.name, &bin_path, dir.path())?;
-    Ok(())
+        Backend::Chromium => {
+            println!(
+                "Installing Chromium app '{}' for URL: {}",
+                args.name, args.url
+            );
+            install_chromium_app(args)
+        }
+    }
 }
 
 fn execute_update(id: &str, args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<()> {
@@ -769,7 +1116,11 @@ fn execute_update(id: &str, args: &BuildArgs, dry_run: bool, print_config: bool)
     }
 
     println!("Updating app '{}' -> '{}' ({})", id, args.name, args.url);
-    remove_app(id)?;
+    let remove_profile = match args.backend {
+        Backend::Chromium => false,
+        Backend::Tauri => true,
+    };
+    remove_app_with_options(id, remove_profile)?;
     execute_build(args, false, false)
 }
 
@@ -787,12 +1138,17 @@ fn main() -> Result<()> {
             width,
             height,
             dark_mode,
+            backend,
+            browser_bin,
+            profile_scope,
             print_config,
             dry_run,
         } => {
+            let internal_id = sanitize_app_id(&name);
             let args = BuildArgs {
                 url,
                 name,
+                internal_id,
                 icon,
                 fullscreen,
                 no_decorations,
@@ -800,6 +1156,9 @@ fn main() -> Result<()> {
                 width,
                 height,
                 dark_mode,
+                backend,
+                browser_bin,
+                profile_scope,
             };
             execute_build(&args, dry_run, print_config)?;
         }
@@ -823,6 +1182,9 @@ fn main() -> Result<()> {
             width,
             height,
             dark_mode,
+            backend,
+            browser_bin,
+            profile_scope,
             dry_run,
             print_config,
         } => {
@@ -834,6 +1196,7 @@ fn main() -> Result<()> {
             let args = BuildArgs {
                 url,
                 name: resolved_name,
+                internal_id: id.clone(),
                 icon,
                 fullscreen,
                 no_decorations,
@@ -841,6 +1204,9 @@ fn main() -> Result<()> {
                 width,
                 height,
                 dark_mode,
+                backend,
+                browser_bin,
+                profile_scope,
             };
             execute_update(&id, &args, dry_run, print_config)?;
         }
@@ -851,7 +1217,11 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_deskify_desktop_entry, sanitize_app_id, validate_remove_id};
+    use super::{
+        Backend, BuildArgs, ProfileScope, build_chromium_exec, chromium_window_size_arg,
+        is_deskify_desktop_entry, sanitize_app_id, validate_remove_id,
+    };
+    use std::path::Path;
 
     #[test]
     fn sanitize_app_id_replaces_spaces_and_strips_symbols() {
@@ -890,5 +1260,56 @@ mod tests {
     fn desktop_entry_detection_rejects_unrelated_entries() {
         let content = "[Desktop Entry]\nExec=/usr/bin/firefox\nCategories=Network;WebBrowser;\n";
         assert!(!is_deskify_desktop_entry(content));
+    }
+
+    fn sample_build_args() -> BuildArgs {
+        BuildArgs {
+            url: "https://chat.com".to_string(),
+            name: "Chat".to_string(),
+            internal_id: "chat".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Chromium,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        }
+    }
+
+    #[test]
+    fn chromium_window_size_requires_both_dimensions() {
+        assert_eq!(
+            chromium_window_size_arg(Some(1200.0), Some(800.0)).as_deref(),
+            Some("--window-size=1200,800")
+        );
+        assert!(chromium_window_size_arg(Some(1200.0), None).is_none());
+        assert!(chromium_window_size_arg(None, Some(800.0)).is_none());
+    }
+
+    #[test]
+    fn chromium_exec_contains_required_args() {
+        let mut args = sample_build_args();
+        args.fullscreen = true;
+        args.dark_mode = true;
+        args.user_agent = Some("UA Test".to_string());
+        args.width = Some(1280.0);
+        args.height = Some(720.0);
+        let exec = build_chromium_exec(
+            &args,
+            Path::new("/usr/bin/chromium"),
+            Some(Path::new("/tmp/profile")),
+        );
+        assert!(exec.contains("/usr/bin/chromium"));
+        assert!(exec.contains("--app=https://chat.com"));
+        assert!(exec.contains("--class=chat"));
+        assert!(exec.contains("--user-data-dir=/tmp/profile"));
+        assert!(exec.contains("--start-fullscreen"));
+        assert!(exec.contains("--window-size=1280,720"));
+        assert!(exec.contains("--force-dark-mode"));
+        assert!(exec.contains("--user-agent="));
     }
 }
