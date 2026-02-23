@@ -192,6 +192,16 @@ Notes:
 - The `tauri` backend still requires Tauri/WebKitGTK system dependencies to build wrappers locally.
 - The `chromium` backend does not require Tauri prerequisites (but it requires an installed Chromium-based browser).
 
+### Arch Linux (AUR)
+
+An AUR package is available (prebuilt binary package):
+
+```bash
+yay -S deskify-bin
+```
+
+⚠️ The AUR package tracks **alpha** tags (`v0.1.0-alpha.N`). Expect occasional breaking changes during early development.
+
 ### Option B: Build from source (Tauri mode)
 
 ### 1. System Dependencies
