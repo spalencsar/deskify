@@ -93,6 +93,7 @@ flowchart TD
 - Generated app build success can vary by distro/system setup (WebKitGTK/Tauri prerequisites)
 - No official cross-platform support (Windows/macOS) yet
 - GitHub Releases / binary automation for `deskify` itself may lag behind source updates during early MVP
+- DRM/protected-media services may not work reliably in the system WebView backend even if they work in a full browser (depends on WebView/DRM support)
 
 ## Where Deskify Is Going
 
