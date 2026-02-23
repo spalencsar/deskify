@@ -19,6 +19,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed base-devel git openssh curl
+          useradd -m -u 1000 builder || true
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,8 +29,12 @@ jobs:
 
       - name: Generate .SRCINFO
         run: |
-          cd packaging
-          makepkg --printsrcinfo > .SRCINFO
+          rm -rf /home/builder/work
+          mkdir -p /home/builder/work
+          cp -R . /home/builder/work
+          chown -R builder:builder /home/builder/work
+          su - builder -c "cd /home/builder/work/packaging && makepkg --printsrcinfo > .SRCINFO"
+          cp /home/builder/work/packaging/.SRCINFO packaging/.SRCINFO
 
       - name: Configure SSH for AUR
         env:
@@ -71,4 +76,3 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "Update deskify-bin to ${GITHUB_REF_NAME}"
           git push
-
