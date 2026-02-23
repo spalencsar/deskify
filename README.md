@@ -215,11 +215,21 @@ deskify build \
   --url "https://netflix.com" \
   --name "Netflix" \
   --fullscreen \
-  --no-decorations \
   --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36" \
   --dark-mode \
   --width 1280 \
   --height 720
+```
+
+Frameless example (without fullscreen):
+
+```bash
+deskify build \
+  --url "https://chat.com" \
+  --name "Chat" \
+  --no-decorations \
+  --width 1200 \
+  --height 800
 ```
 
 * `--icon <PATH>`: Provide a custom PNG icon instead of auto-downloading one.
