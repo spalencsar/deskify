@@ -41,6 +41,9 @@ curl -L -o ~/.local/bin/deskify \
   https://github.com/spalencsar/deskify/releases/latest/download/deskify-linux-x86_64
 chmod +x ~/.local/bin/deskify
 
+# If `deskify` is not found, ensure ~/.local/bin is in PATH (common on Ubuntu/Debian):
+command -v deskify >/dev/null || { echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc; }
+
 deskify build --url "https://chat.com" --name "Chat" --backend chromium
 ```
 
@@ -188,6 +191,8 @@ Notes:
 
 - The `tauri` backend still requires Tauri/WebKitGTK system dependencies to build wrappers locally.
 - The `chromium` backend does not require Tauri prerequisites (but it requires an installed Chromium-based browser).
+
+### Option B: Build from source (Tauri mode)
 
 ### 1. System Dependencies
 Because `deskify` compiles Tauri applications natively on your machine, you need the standard Tauri prerequisites installed before using it.
