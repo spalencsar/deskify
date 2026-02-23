@@ -7,6 +7,32 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+## [v0.1.0-alpha.5] - 2026-02-23
+
+### Added
+- `chromium` compatibility backend via `--backend chromium` using an installed Chromium-based browser in app mode (no local Tauri build for generated apps)
+- `build` / `update` flags for Chromium backend selection and runtime control:
+  - `--backend <tauri|chromium>`
+  - `--browser-bin <PATH>`
+  - `--profile-scope <isolated|shared>`
+- Chromium app install flow with XDG `.desktop` launchers and per-app metadata (`X-Deskify-Backend=chromium`)
+- Optional isolated Chromium profiles under `~/.local/share/deskify/profiles/<id>`
+- `doctor` now reports whether a Chromium-based browser is available in `PATH`
+
+### Changed
+- `update <id>` now keeps the internal app ID stable even when the display name changes
+- `list` now derives the internal ID from the `.desktop` filename (works for both Tauri and Chromium backends)
+- `remove` now also cleans up Chromium profile directories (when present)
+- `update` keeps Chromium isolated profiles by default to preserve sessions/cookies during reinstall
+
+### Fixed
+- Tauri wrapper generation now consistently uses the existing internal ID for generated app identifiers (prevents accidental ID drift during updates)
+- `.desktop` command generation for Chromium backend now escapes arguments (URLs / user agents with spaces or special characters)
+
+### Documentation
+- README now documents backend modes (`tauri` vs `chromium`) and recommends `--backend chromium` for sites that fail in the system WebView backend
+- Added Chromium backend usage examples (`--browser-bin`, `--profile-scope`) and updated compatibility notes
+
 ### Added
 - `build --no-decorations` option to create frameless windows (`decorations: false`) for kiosk/dashboard-style setups
 - README screenshots for KDE/Arch showing launcher integration, running app window, and `deskify list` workflow
