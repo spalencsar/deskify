@@ -24,6 +24,34 @@ Web apps are now core tools, but Linux desktops still treat them like second-cla
 
 `deskify` takes a Linux-first approach: it turns a website into a native-feeling desktop app using [Tauri](https://tauri.app/) and the system webview (for example `webkit2gtk`) instead of bundling a full browser engine per app.
 
+## Problem Fit (Why Deskify vs. Other Approaches)
+
+Deskify is optimized for Linux users who want native desktop integration and CLI-friendly automation for web apps, without shipping a bundled browser runtime per app.
+
+The comparison below is intentionally rough and practical (not benchmark marketing). It describes tradeoffs, not winners in every category.
+
+| Approach | Runtime model | Desktop integration | Automation / scripting | Isolation / sandbox | Setup complexity | Offline capability |
+| --- | --- | --- | --- | --- | --- | --- |
+| Electron / Nativefier | Bundled Chromium per app | Good | Low to medium | Per-app process, app-bundled runtime | Easy to medium | Depends on the site |
+| PWA | Browser runtime | Limited / browser-dependent | Low | Shared browser context | Very easy | Depends on browser + site |
+| Flatpak web app models | Sandbox-oriented runtime model | Good | Limited | Strong sandbox model | Medium | Depends on runtime + site |
+| **Deskify** | System WebView | Native (`.desktop`, icons, WMClass) | **High (CLI-first)** | Medium (system webview model) | Medium (Tauri prerequisites) | Depends on the site |
+
+### Deskify Focus (Today)
+
+Deskify focuses on:
+
+- system-native Linux desktop integration
+- minimal runtime overhead by relying on the system WebView
+- automation-friendly CLI workflows
+- straightforward local install/remove lifecycle management
+
+Deskify intentionally does not aim to:
+
+- replace full browser sandbox products
+- provide a cross-platform abstraction layer
+- ship bundled browser runtimes per generated app
+
 ## How Deskify Works Today (Alpha / MVP)
 
 `deskify` is ready for public use and testing as an **early MVP**, but it is **not production-hardened yet**.
@@ -84,9 +112,11 @@ flowchart TD
 
 ## Why Not Just Use Flatpak Web Apps / PWAs / Electron?
 
-- **Electron wrappers:** powerful, but often heavy for simple single-site desktop apps
-- **PWAs:** useful when available, but integration and behavior vary by browser/desktop environment
-- **Flatpak web app approaches:** can be valid, but `deskify` targets a CLI-driven, system-native, admin-friendly workflow with minimal runtime overhead
+The table above covers the technical tradeoffs in more detail. In practice, `deskify` is most useful when you want:
+
+- a CLI-first workflow for repeatable installs and automation
+- Linux-native desktop integration (`.desktop`, icons, window class behavior)
+- a system-WebView-based runtime model instead of shipping a bundled browser per app
 
 ### Key Features
 - **Extremely Lightweight:** Generated binaries are tiny (~4-6 MB) and RAM consumption is minimal.
