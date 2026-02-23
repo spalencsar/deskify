@@ -7,7 +7,7 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
-## [v0.1.0-alpha.5] - 2026-02-23
+## [v0.1.0-alpha.6] - 2026-02-23
 
 ### Added
 - `chromium` compatibility backend via `--backend chromium` using an installed Chromium-based browser in app mode (no local Tauri build for generated apps)
