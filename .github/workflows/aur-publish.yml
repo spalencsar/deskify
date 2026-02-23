@@ -53,7 +53,10 @@ jobs:
           chmod 700 ~/.ssh
           printf "%s\n" "${AUR_SSH_PRIVATE_KEY}" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # Ensure host key is present for non-interactive git/ssh.
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
           cat >> ~/.ssh/config <<'EOF'
           Host aur.archlinux.org
             User aur
@@ -66,6 +69,8 @@ jobs:
           AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
           AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
         run: |
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+
           git config --global user.name "${AUR_USERNAME:-deskify-bot}"
           git config --global user.email "${AUR_EMAIL:-noreply@example.invalid}"
 
