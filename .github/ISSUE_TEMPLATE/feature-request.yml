@@ -1,0 +1,72 @@
+name: Feature request
+description: Suggest a user-facing improvement, integration idea, or architectural direction
+title: "[feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Feature requests are most helpful when they describe the problem first, then the proposed solution.
+  - type: dropdown
+    id: request_area
+    attributes:
+      label: Area
+      description: Which area best fits this request?
+      options:
+        - integration
+        - icons
+        - architecture/runtime
+        - distro-compat
+        - docs
+        - ci
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: design_signal
+    attributes:
+      label: Design impact
+      description: Tick this if the request changes long-term project direction
+      options:
+        - label: This likely affects architecture or long-term product direction (`design decision`)
+          required: false
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: |
+        I want to ...
+        The current limitation is ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior/API/CLI change you would like to see
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What are you doing today, or what other options did you consider?
+      placeholder: PWAs, Flatpak web apps, manual `.desktop` entries, etc.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / rollout thoughts (optional)
+      description: If relevant, suggest MVP scope or phased rollout
+      placeholder: Could start as..., later evolve into...
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I described the problem, not only the implementation idea
+          required: true
+        - label: I checked existing issues/discussions for duplicates
+          required: true
+

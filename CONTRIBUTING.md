@@ -46,6 +46,10 @@ cargo test
 cargo check
 ```
 
+## Maintainer Notes (Repo Meta / Triage)
+
+Maintainers can use `docs/maintainer-notes.md` for the current label strategy and issue triage conventions during the alpha phase.
+
 ## Manual Smoke Test (Recommended for Behavior Changes)
 
 If your change affects build/install/list/remove behavior, run a quick smoke test:

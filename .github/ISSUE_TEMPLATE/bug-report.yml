@@ -1,0 +1,92 @@
+name: Bug report
+description: Report incorrect behavior, regressions, or build/install failures
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please provide enough detail to reproduce the problem.
+  - type: dropdown
+    id: issue_area
+    attributes:
+      label: Area
+      description: Which area best fits this issue?
+      options:
+        - distro-compat
+        - integration
+        - icons
+        - architecture/runtime
+        - ci
+        - docs
+        - other
+    validations:
+      required: true
+  - type: input
+    id: deskify_version
+    attributes:
+      label: Deskify version
+      description: For example `v0.1.0-alpha.2` or commit SHA
+      placeholder: v0.1.0-alpha.2
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution
+      description: Include distro + version
+      placeholder: Fedora 41 / Arch Linux / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: desktop_environment
+    attributes:
+      label: Desktop environment / session
+      description: Include DE/WM and Wayland/X11 if relevant
+      placeholder: GNOME (Wayland), KDE Plasma (X11), Hyprland
+  - type: textarea
+    id: command
+    attributes:
+      label: Command used
+      description: Exact command that triggered the issue
+      placeholder: |
+        deskify build --url "https://example.com" --name "Example"
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / error output
+      description: Paste the relevant error message or describe what happened
+    validations:
+      required: true
+  - type: textarea
+    id: repro_steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Install prerequisites...
+        2. Run `deskify ...`
+        3. Observe ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the README/known limitations and prerequisites
+          required: true
+        - label: I included distro/environment details
+          required: true
+        - label: I included the exact command and error output
+          required: true
+

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "architecture/runtime",
+    "color": "5319E7",
+    "description": "Runtime model, shared runtime, config-based apps, install model evolution"
+  },
+  {
+    "name": "distro-compat",
+    "color": "D93F0B",
+    "description": "Distro-specific build/runtime issues and environment differences"
+  },
+  {
+    "name": "integration",
+    "color": "0E8A16",
+    "description": "Desktop integration topics (.desktop, icons, launchers, window class behavior)"
+  },
+  {
+    "name": "icons",
+    "color": "FBCA04",
+    "description": "Favicon fetching, icon parsing, icon quality, and fallback behavior"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057FF",
+    "description": "Scoped tasks suitable for first-time contributors"
+  },
+  {
+    "name": "needs testing",
+    "color": "BFDADC",
+    "description": "Behavior change needs manual or wider validation across systems"
+  },
+  {
+    "name": "design decision",
+    "color": "1D76DB",
+    "description": "Affects long-term architecture or product direction"
+  },
+  {
+    "name": "docs",
+    "color": "0075CA",
+    "description": "README, CONTRIBUTING, examples, troubleshooting, and release notes"
+  },
+  {
+    "name": "bug",
+    "color": "D73A4A",
+    "description": "Incorrect behavior or regression"
+  },
+  {
+    "name": "enhancement",
+    "color": "A2EEEF",
+    "description": "Feature or improvement request"
+  },
+  {
+    "name": "ci",
+    "color": "C5DEF5",
+    "description": "GitHub Actions, release workflows, and build checks"
+  },
+  {
+    "name": "feature",
+    "color": "84B6EB",
+    "description": "User-facing functionality addition (release note category)"
+  },
+  {
+    "name": "fix",
+    "color": "E99695",
+    "description": "Behavior correction or bug fix (release note category)"
+  },
+  {
+    "name": "chore",
+    "color": "FEF2C0",
+    "description": "Maintenance tasks and non-user-facing housekeeping"
+  }
+]

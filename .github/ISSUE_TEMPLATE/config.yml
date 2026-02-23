@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Deskify README
+    url: https://github.com/spalencsar/deskify/blob/master/README.md
+    about: Check installation requirements, known limitations, usage examples, and release notes first.
+  - name: Contributing Guide
+    url: https://github.com/spalencsar/deskify/blob/master/CONTRIBUTING.md
+    about: Read local checks, smoke-test guidance, and contribution expectations before opening work-related issues/PRs.
+  - name: Maintainer Notes (Labels / Triage)
+    url: https://github.com/spalencsar/deskify/blob/master/docs/maintainer-notes.md
+    about: Reference label categories and alpha-phase triage conventions.
