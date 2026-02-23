@@ -19,7 +19,7 @@ makepkg -sf
 To compute sha256 sums for a tag:
 
 ```bash
-TAG="v0.1.0-alpha.6"
+TAG="v0.1.0-alpha.7"
 curl -fL -o /tmp/deskify-linux-x86_64 "https://github.com/spalencsar/deskify/releases/download/${TAG}/deskify-linux-x86_64"
 curl -fL -o /tmp/LICENSE "https://raw.githubusercontent.com/spalencsar/deskify/${TAG}/LICENSE"
 sha256sum /tmp/deskify-linux-x86_64 /tmp/LICENSE
