@@ -7,6 +7,14 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+## [v0.1.0-alpha.2] - 2026-02-23
+
+### Fixed
+- Resolved a CI failure caused by Clippy (`items_after_test_module`) by moving the test module to the end of `src/main.rs`
+
+### Changed
+- No functional CLI behavior changes; this is a release/CI correctness follow-up to `v0.1.0-alpha.1`
+
 ## [v0.1.0-alpha.1] - 2026-02-23
 
 ### Added
