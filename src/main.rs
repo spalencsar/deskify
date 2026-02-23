@@ -134,7 +134,9 @@ fn fetch_or_create_icon(
                     write_rgba_png(img, output_path)?;
                     return Ok(());
                 } else {
-                    eprintln!("Warning: Downloaded favicon could not be decoded as an image, falling back to dummy icon.");
+                    eprintln!(
+                        "Warning: Downloaded favicon could not be decoded as an image, falling back to dummy icon."
+                    );
                 }
             }
         }
