@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use directories::BaseDirs;
+use image::{DynamicImage, ImageFormat};
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::fs;
@@ -92,6 +93,16 @@ fn is_deskify_desktop_entry(content: &str) -> bool {
             && (content.contains(".local/bin/") || content.contains("deskify")))
 }
 
+fn write_rgba_png(img: DynamicImage, output_path: &Path) -> Result<()> {
+    // Tauri expects PNG icons in RGBA format; many favicons are palette/LA/ICO etc.
+    let rgba = img.to_rgba8();
+    let rgba_img = DynamicImage::ImageRgba8(rgba);
+    rgba_img
+        .save_with_format(output_path, ImageFormat::Png)
+        .with_context(|| format!("Failed to write RGBA PNG icon to {}", output_path.display()))?;
+    Ok(())
+}
+
 fn fetch_or_create_icon(
     website_url: &str,
     custom_icon: Option<&String>,
@@ -99,8 +110,9 @@ fn fetch_or_create_icon(
 ) -> Result<()> {
     if let Some(icon_path) = custom_icon {
         if Path::new(icon_path).exists() {
-            fs::copy(icon_path, output_path)
-                .with_context(|| format!("Failed to copy custom icon from {}", icon_path))?;
+            let img = image::open(icon_path)
+                .with_context(|| format!("Failed to read custom icon image from {}", icon_path))?;
+            write_rgba_png(img, output_path)?;
             return Ok(());
         } else {
             eprintln!(
@@ -118,8 +130,12 @@ fn fetch_or_create_icon(
         if let Ok(response) = ureq::get(&api_url).call() {
             let mut bytes = Vec::new();
             if response.into_reader().read_to_end(&mut bytes).is_ok() && !bytes.is_empty() {
-                fs::write(output_path, bytes).context("Failed to write downloaded icon to disk")?;
-                return Ok(());
+                if let Ok(img) = image::load_from_memory(&bytes) {
+                    write_rgba_png(img, output_path)?;
+                    return Ok(());
+                } else {
+                    eprintln!("Warning: Downloaded favicon could not be decoded as an image, falling back to dummy icon.");
+                }
             }
         }
     }

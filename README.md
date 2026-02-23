@@ -1,8 +1,8 @@
 <h1 align="center">deskify</h1>
 
 <p align="center">
-  <b>A blazing fast, lightweight Nativefier alternative written in Rust & Tauri.</b><br>
-  Instantly turn any website or web app into a native, standalone Linux desktop application.
+  <b>Turn websites into first-class Linux desktop applications with Rust, Tauri, and the system WebView.</b><br>
+  Build native-feeling, standalone web app wrappers with CLI-first Linux integration.
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ The comparison below is intentionally rough and practical (not benchmark marketi
 | Electron / Nativefier | Bundled Chromium per app | Good | Low to medium | Per-app process, app-bundled runtime | Easy to medium | Depends on the site |
 | PWA | Browser runtime | Limited / browser-dependent | Low | Shared browser context | Very easy | Depends on browser + site |
 | Flatpak web app models | Sandbox-oriented runtime model | Good | Limited | Strong sandbox model | Medium | Depends on runtime + site |
-| **Deskify** | System WebView | Native (`.desktop`, icons, WMClass) | **High (CLI-first)** | Medium (system webview model) | Medium (Tauri prerequisites) | Depends on the site |
+| **Deskify** | System WebView | Native (`.desktop`, icons, WMClass) | **High (CLI-first)** | Medium (shared system WebView security model) | Medium (Tauri prerequisites) | Depends on the site |
 
 ### Deskify Focus (Today)
 
@@ -119,7 +119,7 @@ The table above covers the technical tradeoffs in more detail. In practice, `des
 - a system-WebView-based runtime model instead of shipping a bundled browser per app
 
 ### Key Features
-- **Extremely Lightweight:** Generated binaries are tiny (~4-6 MB) and RAM consumption is minimal.
+- **System-WebView Runtime Model:** Generated wrappers stay small because Deskify relies on the system WebView instead of bundling a browser runtime per app.
 - **Automatic Icon Fetching:** Scrapes high-quality 128x128 favicons automatically using the Google Favicon API.
 - **XDG-Compliant System Integration:** Safely creates `.desktop` entries in `~/.local/share/applications` and manages application icons in `~/.local/share/icons/hicolor/`.
 - **Wayland/X11 Ready:** Perfectly binds `StartupWMClass` to ensure your DE groups the app exactly to its custom icon (no generic gear icons in GNOME/KDE taskbars).
