@@ -12,13 +12,19 @@ use std::process::Command;
 use tempfile::tempdir;
 use url::Url;
 
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    clap::ValueEnum, serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq,
+)]
+#[serde(rename_all = "lowercase")]
 enum Backend {
     Tauri,
     Chromium,
 }
 
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    clap::ValueEnum, serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq,
+)]
+#[serde(rename_all = "lowercase")]
 enum ProfileScope {
     Isolated,
     Shared,
@@ -110,7 +116,11 @@ enum Commands {
         dry_run: bool,
     },
     /// List all installed apps created by deskify
-    List,
+    List {
+        /// Show additional metadata (URL, backend) when available
+        #[arg(long)]
+        verbose: bool,
+    },
     /// Check local prerequisites and environment diagnostics
     Doctor,
     /// Remove a specific app by its internal ID
@@ -118,14 +128,14 @@ enum Commands {
         /// The safe name/ID of the app (e.g., "youtube")
         id: String,
     },
-    /// Rebuild and reinstall an existing app ID with new settings (alpha: URL is required)
+    /// Rebuild and reinstall an existing app ID with new settings (URL is optional when persisted)
     Update {
         /// The existing internal ID (e.g., "chatgpt")
         id: String,
 
-        /// The URL to wrap (required in current alpha because URLs are not persisted yet)
+        /// The URL to wrap (optional if Deskify has persisted app metadata for this ID)
         #[arg(short, long)]
-        url: String,
+        url: Option<String>,
 
         /// Optional new display name (defaults to current desktop entry name or the ID)
         #[arg(short, long)]
@@ -136,12 +146,12 @@ enum Commands {
         icon: Option<String>,
 
         /// Launch the application in fullscreen (Kiosk) mode
-        #[arg(short, long)]
-        fullscreen: bool,
+        #[arg(short, long, action = clap::ArgAction::SetTrue)]
+        fullscreen: Option<bool>,
 
         /// Disable native window decorations (frameless window)
-        #[arg(long)]
-        no_decorations: bool,
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        no_decorations: Option<bool>,
 
         /// Set a custom User-Agent string for the webview
         #[arg(short = 'A', long)]
@@ -156,20 +166,20 @@ enum Commands {
         height: Option<f64>,
 
         /// Force the webview into Dark Mode
-        #[arg(short, long)]
-        dark_mode: bool,
+        #[arg(short, long, action = clap::ArgAction::SetTrue)]
+        dark_mode: Option<bool>,
 
         /// Backend to use for the updated app
-        #[arg(long, value_enum, default_value_t = Backend::Tauri)]
-        backend: Backend,
+        #[arg(long, value_enum)]
+        backend: Option<Backend>,
 
         /// Path to a Chromium-based browser binary (only for `--backend chromium`)
         #[arg(long)]
         browser_bin: Option<String>,
 
         /// Profile isolation for Chromium backend (only for `--backend chromium`)
-        #[arg(long, value_enum, default_value_t = ProfileScope::Isolated)]
-        profile_scope: ProfileScope,
+        #[arg(long, value_enum)]
+        profile_scope: Option<ProfileScope>,
 
         /// Show planned update actions without rebuilding/installing
         #[arg(long)]
@@ -179,6 +189,23 @@ enum Commands {
         #[arg(long)]
         print_config: bool,
     },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct DeskifyAppConfig {
+    schema_version: u32,
+    id: String,
+    name: String,
+    url: String,
+    backend: Backend,
+    browser_bin: Option<String>,
+    profile_scope: ProfileScope,
+    fullscreen: bool,
+    no_decorations: bool,
+    user_agent: Option<String>,
+    width: Option<f64>,
+    height: Option<f64>,
+    dark_mode: bool,
 }
 
 fn sanitize_app_id(name: &str) -> String {
@@ -209,6 +236,75 @@ fn profile_scope_str(scope: ProfileScope) -> &'static str {
         ProfileScope::Isolated => "isolated",
         ProfileScope::Shared => "shared",
     }
+}
+
+fn backend_str(backend: Backend) -> &'static str {
+    match backend {
+        Backend::Tauri => "tauri",
+        Backend::Chromium => "chromium",
+    }
+}
+
+fn deskify_data_dir() -> Result<PathBuf> {
+    let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
+    Ok(base_dirs.data_local_dir().join("deskify"))
+}
+
+fn app_config_path(id: &str) -> Result<PathBuf> {
+    validate_remove_id(id)?;
+    Ok(deskify_data_dir()?
+        .join("apps")
+        .join(format!("{}.json", id)))
+}
+
+fn read_app_config(id: &str) -> Result<Option<DeskifyAppConfig>> {
+    let path = app_config_path(id)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read app config {}", path.display()))?;
+    let cfg: DeskifyAppConfig =
+        serde_json::from_str(&content).context("Failed to parse app config JSON")?;
+    Ok(Some(cfg))
+}
+
+fn write_app_config_from_args(args: &BuildArgs) -> Result<()> {
+    validate_remove_id(&args.internal_id)?;
+    let path = app_config_path(&args.internal_id)?;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).context("Failed to create app config directory")?;
+    }
+    let cfg = DeskifyAppConfig {
+        schema_version: 1,
+        id: args.internal_id.clone(),
+        name: args.name.clone(),
+        url: args.url.clone(),
+        backend: args.backend,
+        browser_bin: args.browser_bin.clone(),
+        profile_scope: args.profile_scope,
+        fullscreen: args.fullscreen,
+        no_decorations: args.no_decorations,
+        user_agent: args.user_agent.clone(),
+        width: args.width,
+        height: args.height,
+        dark_mode: args.dark_mode,
+    };
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&cfg).context("Failed to serialize app config")?,
+    )
+    .with_context(|| format!("Failed to write app config {}", path.display()))?;
+    Ok(())
+}
+
+fn remove_app_config(id: &str) -> Result<()> {
+    let path = app_config_path(id)?;
+    if path.exists() {
+        fs::remove_file(&path).with_context(|| format!("Failed to remove {}", path.display()))?;
+        println!("Removed app config: {:?}", path);
+    }
+    Ok(())
 }
 
 fn build_tauri_config_value(args: &BuildArgs, safe_identifier: &str, bundle_active: bool) -> Value {
@@ -838,7 +934,7 @@ X-Deskify-Browser={}
     Ok(())
 }
 
-fn list_apps() -> Result<()> {
+fn list_apps_with_options(verbose: bool) -> Result<()> {
     let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
     let applications_dir = base_dirs.data_local_dir().join("applications");
 
@@ -871,10 +967,38 @@ fn list_apps() -> Result<()> {
                     .and_then(|l| l.strip_prefix("X-Deskify-Backend="))
                     .unwrap_or("legacy");
 
-                println!(
-                    "- {} (Internal ID: {}, Backend: {})",
-                    name, internal_id, backend
-                );
+                if verbose && validate_remove_id(internal_id).is_ok() {
+                    if let Some(cfg) = read_app_config(internal_id)? {
+                        println!(
+                            "- {} (Internal ID: {}, Backend: {}, URL: {})",
+                            name,
+                            internal_id,
+                            backend_str(cfg.backend),
+                            cfg.url
+                        );
+                    } else {
+                        let url = content
+                            .lines()
+                            .find(|l| l.starts_with("X-Deskify-URL="))
+                            .and_then(|l| l.strip_prefix("X-Deskify-URL="));
+                        if let Some(url) = url {
+                            println!(
+                                "- {} (Internal ID: {}, Backend: {}, URL: {})",
+                                name, internal_id, backend, url
+                            );
+                        } else {
+                            println!(
+                                "- {} (Internal ID: {}, Backend: {})",
+                                name, internal_id, backend
+                            );
+                        }
+                    }
+                } else {
+                    println!(
+                        "- {} (Internal ID: {}, Backend: {})",
+                        name, internal_id, backend
+                    );
+                }
                 found = true;
             }
         }
@@ -885,6 +1009,29 @@ fn list_apps() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn read_desktop_entry_value(id: &str, key: &str) -> Result<Option<String>> {
+    validate_remove_id(id)?;
+    let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("Could not find system BaseDirs"))?;
+    let desktop_path = base_dirs
+        .data_local_dir()
+        .join("applications")
+        .join(format!("{}.desktop", id));
+    if !desktop_path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&desktop_path)
+        .with_context(|| format!("Failed to read desktop entry {}", desktop_path.display()))?;
+    if !is_deskify_desktop_entry(&content) {
+        return Ok(None);
+    }
+    let prefix = format!("{}=", key);
+    Ok(content
+        .lines()
+        .find(|line| line.starts_with(&prefix))
+        .and_then(|line| line.strip_prefix(&prefix))
+        .map(str::to_string))
 }
 
 fn read_installed_app_display_name(id: &str) -> Result<Option<String>> {
@@ -984,6 +1131,9 @@ fn run_doctor() -> Result<()> {
     println!("[info] executable dir: {}", executable_dir.display());
     println!("[info] applications dir: {}", applications_dir.display());
     println!("[info] icons dir: {}", icons_dir.display());
+    if let Ok(exe) = env::current_exe() {
+        println!("[info] deskify path: {}", exe.display());
+    }
 
     if failed {
         Err(anyhow!("Doctor found critical issues"))
@@ -1053,6 +1203,7 @@ fn remove_app_with_options(safe_name: &str, remove_profile: bool) -> Result<()> 
     }
 
     println!("Successfully removed app '{}'.", safe_name);
+    let _ = remove_app_config(safe_name);
     Ok(())
 }
 
@@ -1087,6 +1238,7 @@ fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<
             };
 
             install_tauri_app(args, &bin_path, dir.path())?;
+            write_app_config_from_args(args)?;
             Ok(())
         }
         Backend::Chromium => {
@@ -1094,7 +1246,9 @@ fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<
                 "Installing Chromium app '{}' for URL: {}",
                 args.name, args.url
             );
-            install_chromium_app(args)
+            install_chromium_app(args)?;
+            write_app_config_from_args(args)?;
+            Ok(())
         }
     }
 }
@@ -1162,8 +1316,8 @@ fn main() -> Result<()> {
             };
             execute_build(&args, dry_run, print_config)?;
         }
-        Commands::List => {
-            list_apps()?;
+        Commands::List { verbose } => {
+            list_apps_with_options(verbose)?;
         }
         Commands::Doctor => {
             run_doctor()?;
@@ -1188,25 +1342,84 @@ fn main() -> Result<()> {
             dry_run,
             print_config,
         } => {
+            let existing_cfg = read_app_config(&id)?;
+            let resolved_url = if let Some(url) = url {
+                url
+            } else if let Some(cfg) = &existing_cfg {
+                cfg.url.clone()
+            } else if let Some(url) = read_desktop_entry_value(&id, "X-Deskify-URL")? {
+                url
+            } else {
+                return Err(anyhow!(
+                    "Missing --url for update. Provide --url or rebuild once with a recent Deskify version so metadata can be persisted."
+                ));
+            };
+
             let resolved_name = if let Some(name) = name {
                 name
+            } else if let Some(cfg) = &existing_cfg {
+                cfg.name.clone()
             } else {
                 read_installed_app_display_name(&id)?.unwrap_or_else(|| id.clone())
             };
+
+            let resolved_backend = if let Some(backend) = backend {
+                backend
+            } else if let Some(cfg) = &existing_cfg {
+                cfg.backend
+            } else if let Some(b) = read_desktop_entry_value(&id, "X-Deskify-Backend")? {
+                match b.as_str() {
+                    "chromium" => Backend::Chromium,
+                    "tauri" => Backend::Tauri,
+                    _ => Backend::Tauri,
+                }
+            } else {
+                Backend::Tauri
+            };
+
+            let resolved_profile_scope = if let Some(scope) = profile_scope {
+                scope
+            } else if let Some(cfg) = &existing_cfg {
+                cfg.profile_scope
+            } else {
+                ProfileScope::Isolated
+            };
+
+            let resolved_user_agent = if user_agent.is_some() {
+                user_agent
+            } else {
+                existing_cfg.as_ref().and_then(|c| c.user_agent.clone())
+            };
+            let resolved_width = width.or_else(|| existing_cfg.as_ref().and_then(|c| c.width));
+            let resolved_height = height.or_else(|| existing_cfg.as_ref().and_then(|c| c.height));
+            let resolved_browser_bin =
+                browser_bin.or_else(|| existing_cfg.as_ref().and_then(|c| c.browser_bin.clone()));
+
+            let resolved_fullscreen =
+                fullscreen.unwrap_or(existing_cfg.as_ref().map(|c| c.fullscreen).unwrap_or(false));
+            let resolved_no_decorations = no_decorations.unwrap_or(
+                existing_cfg
+                    .as_ref()
+                    .map(|c| c.no_decorations)
+                    .unwrap_or(false),
+            );
+            let resolved_dark_mode =
+                dark_mode.unwrap_or(existing_cfg.as_ref().map(|c| c.dark_mode).unwrap_or(false));
+
             let args = BuildArgs {
-                url,
+                url: resolved_url,
                 name: resolved_name,
                 internal_id: id.clone(),
                 icon,
-                fullscreen,
-                no_decorations,
-                user_agent,
-                width,
-                height,
-                dark_mode,
-                backend,
-                browser_bin,
-                profile_scope,
+                fullscreen: resolved_fullscreen,
+                no_decorations: resolved_no_decorations,
+                user_agent: resolved_user_agent,
+                width: resolved_width,
+                height: resolved_height,
+                dark_mode: resolved_dark_mode,
+                backend: resolved_backend,
+                browser_bin: resolved_browser_bin,
+                profile_scope: resolved_profile_scope,
             };
             execute_update(&id, &args, dry_run, print_config)?;
         }
