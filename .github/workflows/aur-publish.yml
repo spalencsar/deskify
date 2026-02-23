@@ -1,0 +1,74 @@
+name: Publish to AUR
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  aur-publish:
+    name: Publish deskify-bin
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel git openssh curl
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate PKGBUILD (deskify-bin)
+        run: bash packaging/generate-pkgbuild-bin.sh "${GITHUB_REF_NAME}"
+
+      - name: Generate .SRCINFO
+        run: |
+          cd packaging
+          makepkg --printsrcinfo > .SRCINFO
+
+      - name: Configure SSH for AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          test -n "${AUR_SSH_PRIVATE_KEY}" || { echo "Missing secret: AUR_SSH_PRIVATE_KEY" >&2; exit 1; }
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf "%s\n" "${AUR_SSH_PRIVATE_KEY}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+          EOF
+
+      - name: Publish to AUR (deskify-bin)
+        env:
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+        run: |
+          git config --global user.name "${AUR_USERNAME:-deskify-bot}"
+          git config --global user.email "${AUR_EMAIL:-noreply@example.invalid}"
+
+          rm -rf /tmp/aur-repo
+          git clone ssh://aur@aur.archlinux.org/deskify-bin.git /tmp/aur-repo
+
+          cp packaging/PKGBUILD /tmp/aur-repo/PKGBUILD
+          cp packaging/.SRCINFO /tmp/aur-repo/.SRCINFO
+
+          cd /tmp/aur-repo
+          if git diff --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update deskify-bin to ${GITHUB_REF_NAME}"
+          git push
+
