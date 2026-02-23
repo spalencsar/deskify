@@ -7,6 +7,13 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+### Added
+- `build --no-decorations` option to create frameless windows (`decorations: false`) for kiosk/dashboard-style setups
+- README screenshots for KDE/Arch showing launcher integration, running app window, and `deskify list` workflow
+
+### Fixed
+- Icon handling now normalizes downloaded and custom icons to RGBA PNG before Tauri build (prevents `icon ... is not RGBA` build failures)
+
 ## [v0.1.0-alpha.2] - 2026-02-23
 
 ### Fixed
