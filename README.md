@@ -362,7 +362,7 @@ Note for Chromium backend:
 
 - `--no-decorations` is best-effort and may be ignored by the browser/window manager.
 - `--width` and `--height` are applied together (`--window-size`) only when both are provided.
-- Deskify auto-detects a Chromium-based browser from `PATH`, but some distros ship `chrome` as a wrapper script or use different binary names/paths. If launches fail, set `--browser-bin` to a real browser binary.
+- Deskify auto-detects a Chromium-based browser from `PATH`, but some distros ship Chromium-based browser commands (Chrome/Chromium/Brave, etc.) as wrapper scripts or use different binary names/paths (for example on BigLinux). If launches fail, set `--browser-bin` to a real browser binary.
 
 Troubleshooting (find the real browser binary):
 
