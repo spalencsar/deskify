@@ -7,6 +7,33 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+## [v0.1.0-alpha.9] - 2026-02-25
+
+### Fixed
+- Accept legacy `profile_scope=default` in persisted app configs (treated as `isolated`) and fall back to desktop metadata when a config is invalid
+- Validate Chromium browser binaries before installing `.desktop` entries (prevents silent failures with wrapper scripts)
+
+### Added
+- AUR publish automation (PKGBUILD generator + GitHub Actions workflow) for `deskify-bin`
+
+### Documentation
+- Quick Start improvements and Chromium backend troubleshooting notes
+- AUR install instructions and alpha warning (`yay -S deskify-bin`)
+
+## [v0.1.0-alpha.8] - 2026-02-25
+
+### Added
+- Persisted app metadata under `~/.local/share/deskify/apps/<id>.json`
+- `deskify list --verbose` to show URL/backend when metadata is available
+
+### Changed
+- `deskify update <id>` no longer requires `--url` when metadata exists (migrates older installs on first update/build)
+
+## [v0.1.0-alpha.7] - 2026-02-25
+
+### Added
+- AUR `deskify-bin` packaging template with checksums
+
 ## [v0.1.0-alpha.6] - 2026-02-23
 
 ### Added
