@@ -405,10 +405,37 @@ fn find_binary_in_path(name: &str) -> Option<PathBuf> {
     None
 }
 
+fn chromium_binary_works(path: &Path) -> Result<()> {
+    let output = Command::new(path)
+        .arg("--version")
+        .output()
+        .with_context(|| format!("Failed to execute browser binary {}", path.display()))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let details = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("exit code {}", output.status)
+    };
+    Err(anyhow!(
+        "Browser binary exists but failed to run: {} ({})",
+        path.display(),
+        details
+    ))
+}
+
 fn resolve_chromium_binary(explicit: Option<&str>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         let candidate = PathBuf::from(path);
         if candidate.is_file() {
+            chromium_binary_works(&candidate).with_context(|| {
+                "The specified browser binary does not appear to be usable. If it's a wrapper script, ensure the underlying browser exists."
+            })?;
             return Ok(candidate);
         }
         return Err(anyhow!(
@@ -418,7 +445,9 @@ fn resolve_chromium_binary(explicit: Option<&str>) -> Result<PathBuf> {
     }
 
     for candidate in chromium_candidates() {
-        if let Some(path) = find_binary_in_path(candidate) {
+        if let Some(path) = find_binary_in_path(candidate)
+            && chromium_binary_works(&path).is_ok()
+        {
             return Ok(path);
         }
     }
@@ -1444,6 +1473,8 @@ mod tests {
         is_deskify_desktop_entry, sanitize_app_id, validate_remove_id,
     };
     use std::path::Path;
+    use std::{fs, os::unix::fs::PermissionsExt};
+    use tempfile::tempdir;
 
     #[test]
     fn sanitize_app_id_replaces_spaces_and_strips_symbols() {
@@ -1539,5 +1570,21 @@ mod tests {
     fn profile_scope_accepts_default_alias() {
         let scope: ProfileScope = serde_json::from_str("\"default\"").unwrap();
         assert_eq!(scope, ProfileScope::Isolated);
+    }
+
+    #[test]
+    fn resolve_chromium_binary_rejects_broken_explicit_path() {
+        let dir = tempdir().unwrap();
+        let script = dir.path().join("broken-browser");
+        fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+
+        let err = super::resolve_chromium_binary(Some(script.to_str().unwrap()))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("failed to run") || err.contains("does not appear to be usable"));
     }
 }
