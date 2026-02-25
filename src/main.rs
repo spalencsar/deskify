@@ -26,6 +26,7 @@ enum Backend {
 )]
 #[serde(rename_all = "lowercase")]
 enum ProfileScope {
+    #[serde(alias = "default")]
     Isolated,
     Shared,
 }
@@ -264,9 +265,17 @@ fn read_app_config(id: &str) -> Result<Option<DeskifyAppConfig>> {
     }
     let content = fs::read_to_string(&path)
         .with_context(|| format!("Failed to read app config {}", path.display()))?;
-    let cfg: DeskifyAppConfig =
-        serde_json::from_str(&content).context("Failed to parse app config JSON")?;
-    Ok(Some(cfg))
+    match serde_json::from_str::<DeskifyAppConfig>(&content) {
+        Ok(cfg) => Ok(Some(cfg)),
+        Err(err) => {
+            eprintln!(
+                "Warning: Failed to parse app config {} ({}). Falling back to desktop entry metadata.",
+                path.display(),
+                err
+            );
+            Ok(None)
+        }
+    }
 }
 
 fn write_app_config_from_args(args: &BuildArgs) -> Result<()> {
@@ -1524,5 +1533,11 @@ mod tests {
         assert!(exec.contains("--window-size=1280,720"));
         assert!(exec.contains("--force-dark-mode"));
         assert!(exec.contains("--user-agent="));
+    }
+
+    #[test]
+    fn profile_scope_accepts_default_alias() {
+        let scope: ProfileScope = serde_json::from_str("\"default\"").unwrap();
+        assert_eq!(scope, ProfileScope::Isolated);
     }
 }
