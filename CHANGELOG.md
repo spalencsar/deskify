@@ -7,6 +7,32 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+## [v0.1.1-alpha.1] - 2026-05-04
+
+### Added
+- Comprehensive unit test suite (37 tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization)
+- Module refactoring: code split into 10 focused modules (types, validation, tauri, chromium, icon, desktop, install, app, doctor)
+
+### Fixed
+- Test coverage gaps resolved with tests for:
+  - `desktop_exec_escape` handling of empty strings, whitespace, quotes, and backslashes
+  - `validate_remove_id` rejection of uppercase, special characters, and path traversal attempts
+  - Tauri config generation (fullscreen, no-decorations, dark-mode, user-agent, window dimensions, CSP)
+  - App config serialization roundtrip
+
+### Changed
+- Split `main.rs` (~1900 lines) into modular structure:
+  - `src/types.rs` - CLI definitions and types
+  - `src/validation.rs` - ID sanitization and validation
+  - `src/tauri.rs` - Tauri config and project generation
+  - `src/chromium.rs` - Browser detection and exec building
+  - `src/icon.rs` - Icon fetching and processing
+  - `src/desktop.rs` - Desktop entry utilities
+  - `src/install.rs` - App installation logic
+  - `src/app.rs` - App management (list/remove/config)
+  - `src/doctor.rs` - Diagnostics
+  - `src/main.rs` - Entry point and orchestration
+
 ## [v0.1.0-alpha.9] - 2026-02-25
 
 ### Fixed
