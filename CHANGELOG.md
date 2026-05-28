@@ -16,6 +16,10 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 - Moved remaining unit tests out of `main.rs` into their proper modules (`desktop.rs`, `chromium.rs`, `tauri.rs`, `types.rs`, `validation.rs`).
 - Updated `rust-version` from 1.85 to 1.95 to match the project's documented requirements in `AGENTS.md`.
 
+### Fixed
+- Fixed a bug in the Chromium backend where writing the icon would fail with `ENOENT` because the temporary directory was dropped too early.
+  Thanks to [@shocklateboy92](https://github.com/shocklateboy92) for the fix in [#1](https://github.com/spalencsar/deskify/pull/1).
+
 ### Removed
 - Temporary refactoring artifacts and internal "work-in-progress" comments from the xdg centralization phase (preparation for public repository).
 
