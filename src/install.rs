@@ -9,8 +9,11 @@ use crate::desktop::desktop_paths;
 use crate::types::{BuildArgs, ProfileScope};
 
 pub fn install_tauri_app(args: &BuildArgs, bin_path: &Path, icon_path: &Path) -> Result<()> {
-    let (target_bin, target_icon, desktop_file_path, _data_local_dir) =
-        desktop_paths(&args.internal_id)?;
+    let paths = desktop_paths(&args.internal_id)?;
+    let target_bin = paths.binary;
+    let target_icon = paths.icon;
+    let desktop_file_path = paths.desktop_file;
+
     let executable_dir = target_bin
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Invalid executable target path"))?;
@@ -80,8 +83,11 @@ pub fn install_chromium_app(args: &BuildArgs, icon_path: &Path) -> Result<()> {
         );
     }
 
-    let (target_bin, target_icon, desktop_file_path, _data_local_dir) =
-        desktop_paths(&args.internal_id)?;
+    let paths = desktop_paths(&args.internal_id)?;
+    let target_bin = paths.binary;
+    let target_icon = paths.icon;
+    let desktop_file_path = paths.desktop_file;
+
     let icon_dir = target_icon
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Invalid icon target path"))?;

@@ -1,6 +1,4 @@
-use anyhow::Result;
-use directories::BaseDirs;
-use std::path::PathBuf;
+pub use crate::xdg::desktop_paths;
 
 pub fn desktop_exec_escape(arg: &str) -> String {
     if arg.is_empty() {
@@ -26,25 +24,66 @@ pub fn desktop_exec_join(args: &[String]) -> String {
         .join(" ")
 }
 
-pub fn desktop_paths(internal_id: &str) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf)> {
-    let base_dirs = BaseDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs (e.g. $HOME)"))?;
-    let data_local_dir = base_dirs.data_local_dir();
-    let executable_dir = base_dirs
-        .executable_dir()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| base_dirs.home_dir().join(".local/bin"));
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let applications_dir = data_local_dir.join("applications");
-    let icon_dir = data_local_dir.join("icons/hicolor/128x128/apps");
-    let target_bin = executable_dir.join(internal_id);
-    let target_icon = icon_dir.join(format!("{}.png", internal_id));
-    let desktop_file_path = applications_dir.join(format!("{}.desktop", internal_id));
+    #[test]
+    fn desktop_exec_escape_empty_string() {
+        assert_eq!(desktop_exec_escape(""), "\"\"");
+    }
 
-    Ok((
-        target_bin,
-        target_icon,
-        desktop_file_path,
-        data_local_dir.to_path_buf(),
-    ))
+    #[test]
+    fn desktop_exec_escape_plain_string() {
+        assert_eq!(desktop_exec_escape("hello"), "hello");
+    }
+
+    #[test]
+    fn desktop_exec_escape_with_whitespace() {
+        assert_eq!(desktop_exec_escape("hello world"), "\"hello world\"");
+    }
+
+    #[test]
+    fn desktop_exec_escape_with_quotes() {
+        assert_eq!(desktop_exec_escape("hello\"world"), "\"hello\\\"world\"");
+    }
+
+    #[test]
+    fn desktop_exec_escape_with_backslash() {
+        assert_eq!(desktop_exec_escape("hello\\world"), "\"hello\\\\world\"");
+    }
+
+    #[test]
+    fn desktop_exec_escape_mixed_special_chars() {
+        assert_eq!(desktop_exec_escape("a b\"c\\d"), "\"a b\\\"c\\\\d\"");
+    }
+
+    #[test]
+    fn desktop_exec_join_single_arg() {
+        let args = vec!["/usr/bin/chromium".to_string()];
+        assert_eq!(desktop_exec_join(&args), "/usr/bin/chromium");
+    }
+
+    #[test]
+    fn desktop_exec_join_multiple_args() {
+        let args = vec![
+            "/usr/bin/chromium".to_string(),
+            "--app=https://example.com".to_string(),
+            "--class=myapp".to_string(),
+        ];
+        let result = desktop_exec_join(&args);
+        assert!(result.contains("/usr/bin/chromium"));
+        assert!(result.contains("--app=https://example.com"));
+        assert!(result.contains("--class=myapp"));
+    }
+
+    #[test]
+    fn desktop_exec_join_with_special_chars() {
+        let args = vec![
+            "/usr/bin/chromium".to_string(),
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        ];
+        let result = desktop_exec_join(&args);
+        assert!(result.contains("Mozilla/5.0"));
+    }
 }

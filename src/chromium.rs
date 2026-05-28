@@ -5,8 +5,6 @@ use std::process::Command;
 
 use crate::desktop::desktop_exec_escape;
 use crate::types::{BuildArgs, ProfileScope};
-use crate::validation::validate_remove_id;
-use directories::BaseDirs;
 
 pub fn chromium_candidates() -> &'static [&'static str] {
     &[
@@ -83,14 +81,7 @@ pub fn resolve_chromium_binary(explicit: Option<&str>) -> Result<PathBuf> {
 }
 
 pub fn chromium_profile_dir(internal_id: &str) -> Result<PathBuf> {
-    validate_remove_id(internal_id)?;
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    Ok(base_dirs
-        .data_local_dir()
-        .join("deskify")
-        .join("profiles")
-        .join(internal_id))
+    crate::xdg::chromium_profile_dir(internal_id)
 }
 
 pub fn chromium_window_size_arg(width: Option<f64>, height: Option<f64>) -> Option<String> {
@@ -142,5 +133,102 @@ pub fn backend_str(backend: crate::types::Backend) -> &'static str {
     match backend {
         crate::types::Backend::Tauri => "tauri",
         crate::types::Backend::Chromium => "chromium",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Backend, BuildArgs, ProfileScope};
+    use std::path::Path;
+    use std::{fs, os::unix::fs::PermissionsExt};
+    use tempfile::tempdir;
+
+    fn sample_build_args() -> BuildArgs {
+        BuildArgs {
+            url: "https://chat.com".to_string(),
+            name: "Chat".to_string(),
+            internal_id: "chat".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Chromium,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        }
+    }
+
+    #[test]
+    fn chromium_window_size_requires_both_dimensions() {
+        assert_eq!(
+            chromium_window_size_arg(Some(1200.0), Some(800.0)).as_deref(),
+            Some("--window-size=1200,800")
+        );
+        assert!(chromium_window_size_arg(Some(1200.0), None).is_none());
+        assert!(chromium_window_size_arg(None, Some(800.0)).is_none());
+    }
+
+    #[test]
+    fn chromium_exec_contains_required_args() {
+        let mut args = sample_build_args();
+        args.fullscreen = true;
+        args.dark_mode = true;
+        args.user_agent = Some("UA Test".to_string());
+        args.width = Some(1280.0);
+        args.height = Some(720.0);
+        let exec = build_chromium_exec(
+            &args,
+            Path::new("/usr/bin/chromium"),
+            Some(Path::new("/tmp/profile")),
+        );
+        assert!(exec.contains("/usr/bin/chromium"));
+        assert!(exec.contains("--app=https://chat.com"));
+        assert!(exec.contains("--class=chat"));
+        assert!(exec.contains("--user-data-dir=/tmp/profile"));
+        assert!(exec.contains("--start-fullscreen"));
+        assert!(exec.contains("--window-size=1280,720"));
+        assert!(exec.contains("--force-dark-mode"));
+        assert!(exec.contains("--user-agent="));
+    }
+
+    #[test]
+    fn resolve_chromium_binary_rejects_broken_explicit_path() {
+        let dir = tempdir().unwrap();
+        let script = dir.path().join("broken-browser");
+        fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+
+        let err = resolve_chromium_binary(Some(script.to_str().unwrap()))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("failed to run") || err.contains("does not appear to be usable"));
+    }
+
+    #[test]
+    fn backend_str_converts_correctly() {
+        assert_eq!(backend_str(Backend::Tauri), "tauri");
+        assert_eq!(backend_str(Backend::Chromium), "chromium");
+    }
+
+    #[test]
+    fn profile_scope_str_converts_correctly() {
+        assert_eq!(profile_scope_str(ProfileScope::Isolated), "isolated");
+        assert_eq!(profile_scope_str(ProfileScope::Shared), "shared");
+    }
+
+    #[test]
+    fn chromium_candidates_list_non_empty() {
+        let candidates = chromium_candidates();
+        assert!(!candidates.is_empty());
+        assert!(candidates.contains(&"chromium"));
+        assert!(candidates.contains(&"google-chrome"));
+        assert!(candidates.contains(&"brave-browser"));
     }
 }

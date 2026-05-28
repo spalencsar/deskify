@@ -7,6 +7,22 @@ and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha
 
 ## [Unreleased]
 
+## [v0.1.1-alpha.2] - 2026-05-28
+
+### Changed
+- Major internal refactoring of XDG / Base Directory handling:
+  - Introduced dedicated `src/xdg.rs` module to centralize all path resolution logic.
+  - Removed duplicated `BaseDirs` usage across `app.rs`, `desktop.rs`, `chromium.rs`, `doctor.rs`, and `install.rs`.
+- Moved remaining unit tests out of `main.rs` into their proper modules (`desktop.rs`, `chromium.rs`, `tauri.rs`, `types.rs`, `validation.rs`).
+- Updated `rust-version` from 1.85 to 1.95 to match the project's documented requirements in `AGENTS.md`.
+
+### Removed
+- Temporary refactoring artifacts and internal "work-in-progress" comments from the xdg centralization phase (preparation for public repository).
+
+### Improved
+- Significantly reduced code duplication in path handling.
+- Cleaner and more maintainable project structure for future development.
+
 ## [v0.1.1-alpha.1] - 2026-05-04
 
 ### Added

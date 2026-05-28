@@ -1,9 +1,9 @@
 use anyhow::Result;
-use directories::BaseDirs;
 use std::env;
 use std::process::Command;
 
 use crate::chromium::resolve_chromium_binary;
+use crate::xdg;
 
 pub fn run_doctor() -> Result<()> {
     let mut failed = false;
@@ -67,16 +67,9 @@ pub fn run_doctor() -> Result<()> {
         Err(_) => println!("[warn] no chromium-based browser found in PATH"),
     }
 
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    let executable_dir = base_dirs
-        .executable_dir()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| base_dirs.home_dir().join(".local/bin"));
-    let applications_dir = base_dirs.data_local_dir().join("applications");
-    let icons_dir = base_dirs
-        .data_local_dir()
-        .join("icons/hicolor/128x128/apps");
+    let executable_dir = xdg::executable_dir()?;
+    let applications_dir = xdg::applications_dir()?;
+    let icons_dir = xdg::icons_dir()?;
     println!("[info] executable dir: {}", executable_dir.display());
     println!("[info] applications dir: {}", applications_dir.display());
     println!("[info] icons dir: {}", icons_dir.display());

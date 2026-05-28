@@ -154,3 +154,183 @@ pub fn build_project(project_dir: &Path) -> Result<PathBuf> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Backend, BuildArgs, ProfileScope};
+
+    fn sample_build_args() -> BuildArgs {
+        BuildArgs {
+            url: "https://chat.com".to_string(),
+            name: "Chat".to_string(),
+            internal_id: "chat".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Tauri,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        }
+    }
+
+    #[test]
+    fn tauri_config_basic_generation() {
+        let args = BuildArgs {
+            url: "https://example.com".to_string(),
+            name: "TestApp".to_string(),
+            internal_id: "testapp".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Tauri,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        };
+
+        let config = build_tauri_config_value(&args, "testapp", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("TestApp"));
+        assert!(config_str.contains("https://example.com"));
+        assert!(config_str.contains("com.deskify.testapp"));
+    }
+
+    #[test]
+    fn tauri_config_fullscreen_enabled() {
+        let mut args = sample_build_args();
+        args.fullscreen = true;
+        args.backend = Backend::Tauri;
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("\"fullscreen\":true"));
+    }
+
+    #[test]
+    fn tauri_config_no_decorations() {
+        let mut args = sample_build_args();
+        args.no_decorations = true;
+        args.backend = Backend::Tauri;
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("\"decorations\":false"));
+    }
+
+    #[test]
+    fn tauri_config_dark_mode() {
+        let mut args = sample_build_args();
+        args.dark_mode = true;
+        args.backend = Backend::Tauri;
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("\"theme\":\"Dark\""));
+    }
+
+    #[test]
+    fn tauri_config_user_agent() {
+        let mut args = sample_build_args();
+        args.user_agent = Some("Mozilla/5.0 CustomUA".to_string());
+        args.backend = Backend::Tauri;
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("Mozilla/5.0 CustomUA"));
+    }
+
+    #[test]
+    fn tauri_config_window_dimensions() {
+        let mut args = sample_build_args();
+        args.width = Some(1920.0);
+        args.height = Some(1080.0);
+        args.backend = Backend::Tauri;
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("\"width\":1920"));
+        assert!(config_str.contains("\"height\":1080"));
+    }
+
+    #[test]
+    fn tauri_config_identifier_differs_by_id() {
+        let args1 = BuildArgs {
+            url: "https://a.com".to_string(),
+            name: "App1".to_string(),
+            internal_id: "app1".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Tauri,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        };
+
+        let args2 = BuildArgs {
+            url: "https://b.com".to_string(),
+            name: "App2".to_string(),
+            internal_id: "app2".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Tauri,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        };
+
+        let config1 = build_tauri_config_value(&args1, "app1", false);
+        let config2 = build_tauri_config_value(&args2, "app2", false);
+
+        let s1 = serde_json::to_string(&config1).unwrap();
+        let s2 = serde_json::to_string(&config2).unwrap();
+
+        assert!(s1.contains("com.deskify.app1"));
+        assert!(s2.contains("com.deskify.app2"));
+    }
+
+    #[test]
+    fn tauri_config_csp_null() {
+        let args = BuildArgs {
+            url: "https://example.com".to_string(),
+            name: "Test".to_string(),
+            internal_id: "test".to_string(),
+            icon: None,
+            fullscreen: false,
+            no_decorations: false,
+            user_agent: None,
+            width: None,
+            height: None,
+            dark_mode: false,
+            backend: Backend::Tauri,
+            browser_bin: None,
+            profile_scope: ProfileScope::Isolated,
+        };
+
+        let config = build_tauri_config_value(&args, "test", false);
+        let config_str = serde_json::to_string(&config).unwrap();
+
+        assert!(config_str.contains("\"csp\":null"));
+    }
+}

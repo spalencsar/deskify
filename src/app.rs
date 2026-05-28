@@ -1,26 +1,17 @@
 use anyhow::{Context, Result};
-use directories::BaseDirs;
 use std::fs;
 use std::path::PathBuf;
 
 use crate::chromium::{
-    backend_str, build_chromium_exec, chromium_profile_dir, profile_scope_str,
-    resolve_chromium_binary,
+    backend_str, build_chromium_exec, profile_scope_str, resolve_chromium_binary,
 };
 use crate::types::{Backend, DeskifyAppConfig, ProfileScope};
 use crate::validation::{is_deskify_desktop_entry, validate_remove_id};
-
-pub fn deskify_data_dir() -> Result<PathBuf> {
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    Ok(base_dirs.data_local_dir().join("deskify"))
-}
+use crate::xdg;
 
 pub fn app_config_path(id: &str) -> Result<PathBuf> {
     validate_remove_id(id)?;
-    Ok(deskify_data_dir()?
-        .join("apps")
-        .join(format!("{}.json", id)))
+    Ok(xdg::app_config_dir()?.join(format!("{}.json", id)))
 }
 
 pub fn read_app_config(id: &str) -> Result<Option<DeskifyAppConfig>> {
@@ -82,9 +73,7 @@ pub fn remove_app_config(id: &str) -> Result<()> {
 }
 
 pub fn list_apps_with_options(verbose: bool) -> Result<()> {
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    let applications_dir = base_dirs.data_local_dir().join("applications");
+    let applications_dir = xdg::applications_dir()?;
 
     println!("Installed Deskify Apps:");
     let mut found = false;
@@ -161,12 +150,7 @@ pub fn list_apps_with_options(verbose: bool) -> Result<()> {
 
 pub fn read_desktop_entry_value(id: &str, key: &str) -> Result<Option<String>> {
     validate_remove_id(id)?;
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    let desktop_path = base_dirs
-        .data_local_dir()
-        .join("applications")
-        .join(format!("{}.desktop", id));
+    let desktop_path = xdg::applications_dir()?.join(format!("{}.desktop", id));
     if !desktop_path.exists() {
         return Ok(None);
     }
@@ -185,12 +169,7 @@ pub fn read_desktop_entry_value(id: &str, key: &str) -> Result<Option<String>> {
 
 pub fn read_installed_app_display_name(id: &str) -> Result<Option<String>> {
     validate_remove_id(id)?;
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-    let desktop_path = base_dirs
-        .data_local_dir()
-        .join("applications")
-        .join(format!("{}.desktop", id));
+    let desktop_path = xdg::applications_dir()?.join(format!("{}.desktop", id));
     if !desktop_path.exists() {
         return Ok(None);
     }
@@ -210,14 +189,8 @@ pub fn read_installed_app_display_name(id: &str) -> Result<Option<String>> {
 pub fn remove_app_with_options(safe_name: &str, remove_profile: bool) -> Result<()> {
     validate_remove_id(safe_name)?;
 
-    let base_dirs =
-        BaseDirs::new().ok_or_else(|| anyhow::anyhow!("Could not find system BaseDirs"))?;
-
-    let executable_dir = base_dirs
-        .executable_dir()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| base_dirs.home_dir().join(".local/bin"));
-    let data_local_dir = base_dirs.data_local_dir();
+    let executable_dir = xdg::executable_dir()?;
+    let data_local_dir = xdg::data_local_dir()?;
 
     let binary_path = executable_dir.join(safe_name);
     if binary_path.exists() {
@@ -247,16 +220,17 @@ pub fn remove_app_with_options(safe_name: &str, remove_profile: bool) -> Result<
         println!("Icon not found: {:?}", icon_path);
     }
 
-    let profile_path = data_local_dir.join("deskify/profiles").join(safe_name);
-    if remove_profile {
+    if let Ok(profile_path) = xdg::chromium_profile_dir(safe_name) {
         if profile_path.exists() {
-            fs::remove_dir_all(&profile_path).context("Failed to remove Chromium profile")?;
-            println!("Removed Chromium profile: {:?}", profile_path);
-        } else {
+            if remove_profile {
+                let _ = fs::remove_dir_all(&profile_path);
+                println!("Removed Chromium profile: {:?}", profile_path);
+            } else {
+                println!("Keeping Chromium profile: {:?}", profile_path);
+            }
+        } else if remove_profile {
             println!("Chromium profile not found: {:?}", profile_path);
         }
-    } else if profile_path.exists() {
-        println!("Keeping Chromium profile: {:?}", profile_path);
     }
 
     println!("Successfully removed app '{}'.", safe_name);
@@ -276,7 +250,7 @@ pub fn print_generated_config(args: &crate::types::BuildArgs) -> Result<()> {
         }
         Backend::Chromium => {
             let browser = resolve_chromium_binary(args.browser_bin.as_deref())?;
-            let profile_dir = chromium_profile_dir(&args.internal_id)?;
+            let profile_dir = xdg::chromium_profile_dir(&args.internal_id)?;
             let profile_dir = match args.profile_scope {
                 ProfileScope::Isolated => Some(profile_dir),
                 ProfileScope::Shared => None,

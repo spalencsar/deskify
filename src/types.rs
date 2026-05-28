@@ -159,3 +159,43 @@ pub enum Commands {
         print_config: bool,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_scope_accepts_default_alias() {
+        let scope: ProfileScope = serde_json::from_str("\"default\"").unwrap();
+        assert_eq!(scope, ProfileScope::Isolated);
+    }
+
+    #[test]
+    fn app_config_roundtrip_serialization() {
+        let cfg = DeskifyAppConfig {
+            schema_version: 1,
+            id: "test-app".to_string(),
+            name: "Test App".to_string(),
+            url: "https://example.com".to_string(),
+            backend: Backend::Chromium,
+            browser_bin: Some("/usr/bin/chromium".to_string()),
+            profile_scope: ProfileScope::Isolated,
+            fullscreen: true,
+            no_decorations: false,
+            user_agent: Some("TestUA".to_string()),
+            width: Some(1024.0),
+            height: Some(768.0),
+            dark_mode: true,
+        };
+
+        let serialized = serde_json::to_string(&cfg).unwrap();
+        let deserialized: DeskifyAppConfig = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.id, cfg.id);
+        assert_eq!(deserialized.name, cfg.name);
+        assert_eq!(deserialized.url, cfg.url);
+        assert_eq!(deserialized.backend, cfg.backend);
+        assert_eq!(deserialized.fullscreen, cfg.fullscreen);
+        assert_eq!(deserialized.dark_mode, cfg.dark_mode);
+    }
+}
