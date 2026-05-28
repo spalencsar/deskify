@@ -3,7 +3,7 @@
 All notable changes to `deskify` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project follows early MVP/alpha versioning with tags like `v0.1.0-alpha.1`.
+and this project follows early MVP/alpha versioning (e.g. `v0.1.1-alpha.2`).
 
 ## [Unreleased]
 
