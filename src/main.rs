@@ -57,7 +57,8 @@ fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<
                 "Installing Chromium app '{}' for URL: {}",
                 args.name, args.url
             );
-            let icon_temp_dir = tempdir().context("Failed to create temporary directory for icon")?;
+            let icon_temp_dir =
+                tempdir().context("Failed to create temporary directory for icon")?;
             let temp_icon = icon_temp_dir.path().join("icon.png");
             icon::fetch_or_create_icon(&args.url, args.icon.as_ref(), &temp_icon)?;
             install::install_chromium_app(args, &temp_icon)?;
