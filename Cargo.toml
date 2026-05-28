@@ -2,6 +2,13 @@
 name = "deskify"
 version = "0.1.1-alpha.1"
 edition = "2024"
+rust-version = "1.85"
+description = "Turn websites into first-class Linux desktop applications using Tauri and the system WebView"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/spalencsar/deskify"
+keywords = ["desktop", "webapp", "tauri", "linux", "cli", "webview"]
+categories = ["command-line-utilities", "gui"]
 
 [dependencies]
 anyhow = "1.0.102"
