@@ -2,7 +2,7 @@
 name = "deskify"
 version = "0.1.1-alpha.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 description = "Turn websites into first-class Linux desktop applications using Tauri and the system WebView"
 license = "MIT"
 readme = "README.md"
