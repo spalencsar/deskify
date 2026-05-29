@@ -106,6 +106,7 @@ Deskify intentionally does not aim to:
 - **Why this MVP design:** Simpler debugging, isolated failures, low contributor complexity.
 - **Tradeoff:** Tauri builds can take time and depend on local system dependencies.
 - **Test coverage:** 37 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization. Tests are distributed across modules.
+- **Recent Development:** In recent alpha releases, the project has undergone significant internal improvements (new centralized XDG module in `src/xdg.rs` and tests moved out of `main.rs`) to increase long-term maintainability.
 
 ### MVP Architecture (Today)
 
