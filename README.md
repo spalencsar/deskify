@@ -45,7 +45,7 @@ chmod +x ~/.local/bin/deskify
 # If `deskify` is not found, ensure ~/.local/bin is in PATH (common on Ubuntu/Debian):
 command -v deskify >/dev/null || { echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc; }
 
-deskify build --url "https://chat.com" --name "Chat" --backend chromium
+deskify build --url "https://chat.com" --name "Chat"
 ```
 
 ### Option B: Native Tauri mode (system WebView, no Chromium dependency)
@@ -53,7 +53,7 @@ deskify build --url "https://chat.com" --name "Chat" --backend chromium
 Follow the full install section below (Tauri/WebKitGTK prerequisites), then:
 
 ```bash
-deskify build --url "https://chat.com" --name "Chat"
+deskify build --url "https://chat.com" --name "Chat" --backend tauri
 ```
 
 ## Why Deskify Exists
@@ -100,11 +100,11 @@ Deskify intentionally does not aim to:
 
 - **Platform scope:** Linux only
 - **Current architecture:** Two supported backends:
-  - **Tauri** (default): Generates and builds a small native wrapper per app using the system WebView.
-  - **Chromium**: Uses an existing Chromium-based browser in app mode (no local Tauri compilation).
+  - **Chromium** (default): Uses an existing Chromium-based browser in app mode (fast, no local compilation needed).
+  - **Tauri**: Generates and builds a small native wrapper per app using the system WebView.
 - **Build model:** For the Tauri backend, `deskify` compiles the wrapper locally on your machine.
 - **Why this MVP design:** Simpler debugging, isolated failures, low contributor complexity.
-- **Tradeoff:** Tauri builds can take time and depend on local system dependencies.
+- **Tradeoff:** The Tauri backend requires system dependencies and can take significant time to build.
 - **Test coverage:** 37 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization. Tests are distributed across modules.
 - **Recent Development:** In recent alpha releases, the project has undergone significant internal improvements (new centralized XDG module in `src/xdg.rs` and tests moved out of `main.rs`) to increase long-term maintainability.
 
@@ -122,17 +122,17 @@ flowchart TD
     E --> F[Launch from Linux app menu]
 ```
 
-The **Tauri backend** (default) generates and compiles a small native wrapper per app.  
-The **Chromium backend** skips the local build entirely and launches the site using an existing Chromium-based browser.
+The **Chromium backend** (default) uses an existing Chromium-based browser in app mode and skips the local build entirely.  
+The **Tauri backend** generates and compiles a small native wrapper per app using the system WebView (requires Tauri build dependencies).
 
 ### Known Limitations
 
-- Requires Tauri/Linux system dependencies to be installed locally before `deskify build`
-- Generated app build success can vary by distro/system setup (WebKitGTK/Tauri prerequisites)
-- Some modern sites fail or degrade in the system WebView backend (`tauri`) due to engine/runtime differences
-- No official cross-platform support (Windows/macOS) yet
-- GitHub Releases / binary automation for `deskify` itself may lag behind source updates during early MVP
-- DRM/protected-media services may not work reliably in the system WebView backend even if they work in a full browser (depends on WebView/DRM support)
+- The Tauri backend requires Linux system dependencies (WebKitGTK etc.) and can take significant time to build.
+- Generated app build success with the Tauri backend can vary by distro/system setup.
+- Some modern sites may not work well in the system WebView (Tauri backend).
+- The Chromium backend requires a Chromium-based browser installed (Flatpak browsers are not supported).
+- No official cross-platform support (Windows/macOS) yet.
+- GitHub Releases / binary automation for `deskify` itself may lag behind source updates during early MVP.
 
 ## Where Deskify Is Going
 
