@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Powered_by-Tauri_v2-grey?style=flat-square" alt="Tauri v2" />
   <img src="https://img.shields.io/badge/Status-Alpha-yellow?style=flat-square" alt="Alpha status" />
   <img src="https://img.shields.io/badge/Tests-37-green?style=flat-square" alt="37 unit tests" />
-  <img src="https://img.shields.io/github/v/release/spalencsar/deskify?label=Latest%20Release&style=flat-square" alt="Latest release" />
+  <img src="https://img.shields.io/github/v/release/spalencsar/deskify?include_prereleases=true&label=Latest%20Release&style=flat-square" alt="Latest release" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT license" />
 </p>
 
