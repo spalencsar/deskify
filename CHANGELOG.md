@@ -15,6 +15,7 @@ and this project follows early MVP/alpha versioning (e.g. `v0.1.1-alpha.2`).
   - Removed duplicated `BaseDirs` usage across `app.rs`, `desktop.rs`, `chromium.rs`, `doctor.rs`, and `install.rs`.
 - Moved remaining unit tests out of `main.rs` into their proper modules (`desktop.rs`, `chromium.rs`, `tauri.rs`, `types.rs`, `validation.rs`).
 - Updated `rust-version` from 1.85 to 1.95 to match the project's documented requirements in `AGENTS.md`.
+- Changed the default backend from `tauri` to `chromium` (the Chromium backend is now the recommended default for most users).
 
 ### Fixed
 - Fixed a bug in the Chromium backend where writing the icon would fail with `ENOENT` because the temporary directory was dropped too early.
