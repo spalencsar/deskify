@@ -99,24 +99,30 @@ Deskify intentionally does not aim to:
 `deskify` is ready for public use and testing as an **early MVP**, but it is **not production-hardened yet**.
 
 - **Platform scope:** Linux only
-- **Current architecture:** one generated Tauri wrapper project per app
-- **Build model:** `deskify` compiles the wrapper locally on your machine
-- **Why this MVP design:** simpler debugging, isolated failures, low contributor complexity
-- **Tradeoff:** build time and distro-specific setup issues become user-facing
-- **Test coverage:** 37 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization
+- **Current architecture:** Two supported backends:
+  - **Tauri** (default): Generates and builds a small native wrapper per app using the system WebView.
+  - **Chromium**: Uses an existing Chromium-based browser in app mode (no local Tauri compilation).
+- **Build model:** For the Tauri backend, `deskify` compiles the wrapper locally on your machine.
+- **Why this MVP design:** Simpler debugging, isolated failures, low contributor complexity.
+- **Tradeoff:** Tauri builds can take time and depend on local system dependencies.
+- **Test coverage:** 37 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization. Tests are distributed across modules.
 
 ### MVP Architecture (Today)
 
+Deskify currently supports two backends:
+
 ```mermaid
 flowchart TD
-    A[deskify CLI] --> B[Generate temporary Tauri wrapper project]
-    B --> C[Fetch or copy icon]
-    C --> D[Write tauri.conf.json + source files]
-    D --> E[Run cargo tauri build locally]
-    E --> F[Install binary to local executable dir]
-    F --> G[Install icon + .desktop entry]
-    G --> H[Launch from Linux app menu]
+    A[deskify CLI] --> B{Backend?}
+    B -->|Tauri| C[Generate + build Tauri wrapper]
+    B -->|Chromium| D[Use installed Chromium browser in app mode]
+    C --> E[Install .desktop + icon]
+    D --> E
+    E --> F[Launch from Linux app menu]
 ```
+
+The **Tauri backend** (default) generates and compiles a small native wrapper per app.  
+The **Chromium backend** skips the local build entirely and launches the site using an existing Chromium-based browser.
 
 ### Known Limitations
 
