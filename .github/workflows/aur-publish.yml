@@ -1,15 +1,21 @@
 name: Publish to AUR
 
 on:
-  push:
-    tags:
-      - "v*"
+  # Primärer Trigger: wird vom Release-Workflow via workflow_dispatch aufgerufen,
+  # nachdem der GitHub-Release + Asset-Upload erfolgreich war.
+  # Das verhindert die frühere Race Condition (falsche sha256sums weil das Binary
+  # noch nicht vollständig verfügbar war).
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to publish to AUR (e.g. v0.1.0-alpha.8)"
         required: true
         type: string
+
+  # Fallback / manueller Trigger (z.B. Re-Release oder manuelles Nachpushen)
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: read

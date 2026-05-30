@@ -28,6 +28,8 @@ fn execute_build(args: &BuildArgs, dry_run: bool, print_config: bool) -> Result<
 
     match args.backend {
         Backend::Tauri => {
+            app::warn_tauri_backend();
+
             println!(
                 "Generating native app '{}' for URL: {}",
                 args.name, args.url

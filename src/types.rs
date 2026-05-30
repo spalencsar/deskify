@@ -90,7 +90,7 @@ pub enum Commands {
         #[arg(short, long)]
         dark_mode: bool,
 
-        #[arg(long, value_enum, default_value_t = Backend::Tauri)]
+        #[arg(long, value_enum, default_value_t = Backend::Chromium)]
         backend: Backend,
 
         #[arg(long)]

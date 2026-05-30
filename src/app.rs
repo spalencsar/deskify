@@ -7,6 +7,18 @@ use crate::chromium::{
 };
 use crate::types::{Backend, DeskifyAppConfig, ProfileScope};
 use crate::validation::{is_deskify_desktop_entry, validate_remove_id};
+
+/// Prints a warning when the user explicitly chooses the Tauri backend.
+/// Chromium is now the recommended default.
+pub(crate) fn warn_tauri_backend() {
+    eprintln!(
+        "Warning: You selected the Tauri backend (--backend tauri).\n\
+         This is no longer the default and requires a full Tauri build environment.\n\
+         Build times can take several minutes (or significantly longer on first builds).\n\n\
+         For most users, the Chromium backend (now the default) is recommended.\n\
+         You can omit --backend or explicitly use --backend chromium."
+    );
+}
 use crate::xdg;
 
 pub fn app_config_path(id: &str) -> Result<PathBuf> {
@@ -286,6 +298,7 @@ pub fn print_build_plan(action: &str, args: &crate::types::BuildArgs, existing_i
     println!("- Internal ID: {}", id);
     match args.backend {
         Backend::Tauri => {
+            warn_tauri_backend();
             println!("- Backend: tauri (system WebView)");
             println!("- Local build: cargo tauri build (temporary generated project)");
             println!("- Install targets: local binary + XDG icon + .desktop entry");
