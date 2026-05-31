@@ -6,6 +6,8 @@ First off, thank you for considering contributing to Deskify! It's people like y
 
 ## How Can I Contribute?
 
+Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before participating in project discussions, issues, or pull requests.
+
 ### Reporting Bugs
 This section guides you through submitting a bug report for Deskify. Following these guidelines helps maintainers and the community understand your report, reproduce the behavior, and find related reports.
 
@@ -28,6 +30,10 @@ This section guides you through submitting an enhancement suggestion for Deskify
 * Document new code based on the existing documentation style.
 * End all files with a newline.
 * Prefer small, focused PRs (one behavioral change per PR).
+
+### Reporting Security Issues
+
+Do not open a public issue for vulnerabilities. Follow [SECURITY.md](SECURITY.md) instead.
 
 ## Development Setup
 1. Deskify relies on `tauri`. Ensure `tauri-cli` is installed via `cargo install tauri-cli`.
