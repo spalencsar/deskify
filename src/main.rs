@@ -95,6 +95,28 @@ fn execute_update(id: &str, args: &BuildArgs, dry_run: bool, print_config: bool)
     execute_build(args, false, false)
 }
 
+fn resolve_update_bool(
+    enable: Option<bool>,
+    disable: bool,
+    existing: Option<bool>,
+    default: bool,
+    enable_flag: &str,
+    disable_flag: &str,
+) -> Result<bool> {
+    if enable.unwrap_or(false) && disable {
+        return Err(anyhow::anyhow!(
+            "Cannot use {} and {} together.",
+            enable_flag,
+            disable_flag
+        ));
+    }
+    if disable {
+        Ok(false)
+    } else {
+        Ok(enable.unwrap_or(existing.unwrap_or(default)))
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -148,11 +170,14 @@ fn main() -> Result<()> {
             name,
             icon,
             fullscreen,
+            no_fullscreen,
             no_decorations,
+            decorations,
             user_agent,
             width,
             height,
             dark_mode,
+            light_mode,
             backend,
             browser_bin,
             profile_scope,
@@ -212,16 +237,30 @@ fn main() -> Result<()> {
             let resolved_browser_bin =
                 browser_bin.or_else(|| existing_cfg.as_ref().and_then(|c| c.browser_bin.clone()));
 
-            let resolved_fullscreen =
-                fullscreen.unwrap_or(existing_cfg.as_ref().map(|c| c.fullscreen).unwrap_or(false));
-            let resolved_no_decorations = no_decorations.unwrap_or(
-                existing_cfg
-                    .as_ref()
-                    .map(|c| c.no_decorations)
-                    .unwrap_or(false),
-            );
-            let resolved_dark_mode =
-                dark_mode.unwrap_or(existing_cfg.as_ref().map(|c| c.dark_mode).unwrap_or(false));
+            let resolved_fullscreen = resolve_update_bool(
+                fullscreen,
+                no_fullscreen,
+                existing_cfg.as_ref().map(|c| c.fullscreen),
+                false,
+                "--fullscreen",
+                "--no-fullscreen",
+            )?;
+            let resolved_no_decorations = resolve_update_bool(
+                no_decorations,
+                decorations,
+                existing_cfg.as_ref().map(|c| c.no_decorations),
+                false,
+                "--no-decorations",
+                "--decorations",
+            )?;
+            let resolved_dark_mode = resolve_update_bool(
+                dark_mode,
+                light_mode,
+                existing_cfg.as_ref().map(|c| c.dark_mode),
+                false,
+                "--dark-mode",
+                "--light-mode",
+            )?;
 
             let args = BuildArgs {
                 url: resolved_url,
@@ -243,4 +282,28 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_update_bool_uses_existing_when_unchanged() {
+        assert!(resolve_update_bool(None, false, Some(true), false, "--on", "--off").unwrap());
+    }
+
+    #[test]
+    fn resolve_update_bool_can_disable_existing_true() {
+        assert!(!resolve_update_bool(None, true, Some(true), false, "--on", "--off").unwrap());
+    }
+
+    #[test]
+    fn resolve_update_bool_rejects_conflicting_flags() {
+        let err = resolve_update_bool(Some(true), true, Some(false), false, "--on", "--off")
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("Cannot use --on and --off together"));
+    }
 }

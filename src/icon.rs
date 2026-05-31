@@ -33,11 +33,26 @@ pub fn download_icon_from_url(icon_url: &str, output_path: &Path) -> Result<bool
 }
 
 pub fn extract_icon_candidates_from_html(base_url: &Url, html: &str) -> Vec<String> {
-    let link_re = Regex::new(r#"(?is)<link\s+[^>]*rel\s*=\s*["'][^"']*icon[^"']*["'][^>]*href\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+    let link_re = Regex::new(r#"(?is)<link\s+[^>]*>"#).unwrap();
+    let attr_re = Regex::new(r#"(?is)\b(rel|href)\s*=\s*["']([^"']*)["']"#).unwrap();
     let mut candidates = Vec::new();
-    for cap in link_re.captures_iter(html) {
-        if let Some(href) = cap.get(1)
-            && let Ok(joined) = base_url.join(href.as_str())
+    for link in link_re.find_iter(html) {
+        let mut rel = None;
+        let mut href = None;
+        for cap in attr_re.captures_iter(link.as_str()) {
+            match cap.get(1).map(|m| m.as_str().to_ascii_lowercase()) {
+                Some(key) if key == "rel" => rel = cap.get(2).map(|m| m.as_str().to_string()),
+                Some(key) if key == "href" => href = cap.get(2).map(|m| m.as_str().to_string()),
+                _ => {}
+            }
+        }
+
+        if rel
+            .as_deref()
+            .map(|value| value.to_ascii_lowercase().contains("icon"))
+            .unwrap_or(false)
+            && let Some(href) = href
+            && let Ok(joined) = base_url.join(&href)
         {
             let candidate = joined.to_string();
             if !candidates.contains(&candidate) {
@@ -120,4 +135,32 @@ pub fn fetch_or_create_icon(
     fs::write(output_path, dummy_png).context("Failed to write dummy icon fallback")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_icon_candidates_accepts_href_before_rel() {
+        let base_url = Url::parse("https://example.com/app/").unwrap();
+        let html = r#"<link href="/favicon.png" sizes="32x32" rel="shortcut icon">"#;
+
+        let candidates = extract_icon_candidates_from_html(&base_url, html);
+
+        assert_eq!(candidates, vec!["https://example.com/favicon.png"]);
+    }
+
+    #[test]
+    fn extract_icon_candidates_deduplicates_urls() {
+        let base_url = Url::parse("https://example.com/").unwrap();
+        let html = r#"
+            <link rel="icon" href="/favicon.png">
+            <link href="/favicon.png" rel="apple-touch-icon">
+        "#;
+
+        let candidates = extract_icon_candidates_from_html(&base_url, html);
+
+        assert_eq!(candidates, vec!["https://example.com/favicon.png"]);
+    }
 }

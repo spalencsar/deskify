@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Language-Rust-orange?style=flat-square" alt="Written in Rust" />
   <img src="https://img.shields.io/badge/Powered_by-Tauri_v2-grey?style=flat-square" alt="Tauri v2" />
   <img src="https://img.shields.io/badge/Status-Alpha-yellow?style=flat-square" alt="Alpha status" />
-  <img src="https://img.shields.io/badge/Tests-37-green?style=flat-square" alt="37 unit tests" />
+  <img src="https://img.shields.io/badge/Tests-43-green?style=flat-square" alt="43 unit tests" />
   <img src="https://img.shields.io/github/v/release/spalencsar/deskify?include_prereleases&sort=semver&label=Latest%20Release&style=flat-square" alt="Latest release" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT license" />
 </p>
@@ -105,7 +105,7 @@ Deskify intentionally does not aim to:
 - **Build model:** For the Tauri backend, `deskify` compiles the wrapper locally on your machine.
 - **Why this MVP design:** Simpler debugging, isolated failures, low contributor complexity.
 - **Tradeoff:** The Tauri backend requires system dependencies and can take significant time to build.
-- **Test coverage:** 37 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, and app config serialization. Tests are distributed across modules.
+- **Test coverage:** 43 unit tests covering desktop entry escaping, Tauri config generation, validation, Chromium backend, icon discovery, update option resolution, and app config serialization. Tests are distributed across modules.
 - **Recent Development:** In recent alpha releases, the project has undergone significant internal improvements (new centralized XDG module in `src/xdg.rs` and tests moved out of `main.rs`) to increase long-term maintainability.
 
 ### MVP Architecture (Today)
@@ -283,15 +283,15 @@ Once the build finishes, `ChatGPT` will instantly appear in your system Applicat
 
 Deskify supports two backend modes:
 
-- `tauri` (default): Uses the system WebView (`webkit2gtk` on Linux). Produces small wrappers and strong Linux desktop integration, but some sites may fail due to engine compatibility.
-- `chromium`: Uses an already installed Chromium-based browser (`chromium`, `google-chrome`, `brave`, etc.) in app mode. Better site compatibility and no local Tauri build, but depends on a browser installed on the system.
+- `chromium` (default): Uses an already installed Chromium-based browser (`chromium`, `google-chrome`, `brave`, etc.) in app mode. Better site compatibility and no local Tauri build, but depends on a browser installed on the system.
+- `tauri`: Uses the system WebView (`webkit2gtk` on Linux). Produces small wrappers and strong Linux desktop integration, but requires a Tauri build environment and some sites may fail due to engine compatibility.
 
-If a site does not work in the default `tauri` backend, try `--backend chromium`.
+If you specifically want the system WebView backend, use `--backend tauri`.
 
 Quick decision rule:
 
-- Start with the default `tauri` backend for small wrappers and native Linux integration.
-- If the site fails to load, behaves incorrectly, or needs a newer browser engine, rebuild/update with `--backend chromium`.
+- Start with the default `chromium` backend for the fastest install path and broad site compatibility.
+- Use `--backend tauri` when you specifically want a system-WebView wrapper and have the Tauri/WebKitGTK prerequisites installed.
 
 #### Advanced Build Options
 ```bash
@@ -316,7 +316,7 @@ deskify build \
   --height 800
 ```
 
-Preview the generated Tauri config without building/installing:
+Preview the generated backend config without building/installing:
 
 ```bash
 deskify build --url "https://chat.com" --name "Chat" --print-config
@@ -358,12 +358,12 @@ deskify build --url "https://chat.com" --name "Chat" --dry-run
 * `--fullscreen`: Starts the app in Kiosk mode.
 * `--no-decorations`: Disables native window decorations (frameless window; useful for dashboards/kiosk setups).
 * `--user-agent <UA>`: Useful to bypass webview restrictions on certain platforms.
-* `--dark-mode`: Forces the Tauri webview into a dark theme.
+* `--dark-mode`: Requests a dark theme (`tauri`) or Chromium dark mode (`chromium`).
 * `--width <PX>` / `--height <PX>`: Sets the startup resolution.
 * `--backend <tauri|chromium>`: Choose system WebView (`tauri`) or Chromium app mode (`chromium`).
 * `--browser-bin <PATH>`: Use a specific Chromium-based browser binary (Chromium backend only).
 * `--profile-scope <isolated|shared>`: Chromium backend profile behavior (`isolated` creates a per-app profile under `~/.local/share/deskify/profiles/`).
-* `--print-config`: Prints the generated `tauri.conf.json` and exits.
+* `--print-config`: Prints the generated backend config and exits.
 * `--dry-run`: Shows planned actions without building/installing.
 
 Note for Chromium backend:
@@ -417,6 +417,11 @@ deskify update chat --url "https://chat.com" --name "Chat" --no-decorations
 Deskify persists app metadata under `~/.local/share/deskify/apps/<id>.json`. With persisted metadata, `update` can be used without `--url`.
 If an older app has no metadata yet, provide `--url` once (or rebuild once) to migrate it.
 `update <id>` keeps the existing internal ID stable even if you change the display name.
+Boolean options from saved metadata can be turned off explicitly:
+
+```bash
+deskify update chat --no-fullscreen --decorations --light-mode
+```
 
 You can also preview an update:
 

@@ -129,7 +129,13 @@ pub enum Commands {
         fullscreen: Option<bool>,
 
         #[arg(long, action = clap::ArgAction::SetTrue)]
+        no_fullscreen: bool,
+
+        #[arg(long, action = clap::ArgAction::SetTrue)]
         no_decorations: Option<bool>,
+
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        decorations: bool,
 
         #[arg(short = 'A', long)]
         user_agent: Option<String>,
@@ -142,6 +148,9 @@ pub enum Commands {
 
         #[arg(short, long, action = clap::ArgAction::SetTrue)]
         dark_mode: Option<bool>,
+
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        light_mode: bool,
 
         #[arg(long, value_enum)]
         backend: Option<Backend>,
@@ -197,5 +206,32 @@ mod tests {
         assert_eq!(deserialized.backend, cfg.backend);
         assert_eq!(deserialized.fullscreen, cfg.fullscreen);
         assert_eq!(deserialized.dark_mode, cfg.dark_mode);
+    }
+
+    #[test]
+    fn update_accepts_disable_flags() {
+        let cli = Cli::try_parse_from([
+            "deskify",
+            "update",
+            "chat",
+            "--no-fullscreen",
+            "--decorations",
+            "--light-mode",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Commands::Update {
+                no_fullscreen,
+                decorations,
+                light_mode,
+                ..
+            } => {
+                assert!(no_fullscreen);
+                assert!(decorations);
+                assert!(light_mode);
+            }
+            _ => panic!("expected update command"),
+        }
     }
 }

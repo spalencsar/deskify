@@ -7,6 +7,20 @@ and this project follows early MVP/alpha versioning (e.g. `v0.1.1-alpha.2`).
 
 ## [Unreleased]
 
+### Changed
+- Updated documentation to describe Chromium as the default backend consistently.
+- `doctor` now treats `cargo tauri` as optional unless the user chooses `--backend tauri`.
+
+### Added
+- Added `deskify update` disable flags for persisted boolean options:
+  - `--no-fullscreen`
+  - `--decorations`
+  - `--light-mode`
+- Added tests for update boolean option resolution and icon link parsing.
+
+### Fixed
+- Icon discovery now accepts `<link>` tags where `href` appears before `rel`.
+
 ## [v0.1.1-alpha.2] - 2026-05-28
 
 ### Changed

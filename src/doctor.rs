@@ -36,17 +36,18 @@ pub fn run_doctor() -> Result<()> {
         }
     }
 
-    match Command::new("cargo").args(["tauri", "--version"]).output() {
+    let tauri_available = match Command::new("cargo").args(["tauri", "--version"]).output() {
         Ok(output) if output.status.success() => {
             println!("[ok] {}", String::from_utf8_lossy(&output.stdout).trim());
+            true
         }
         _ => {
             println!(
-                "[fail] cargo tauri not available (install with: cargo install tauri-cli --version \"^2.0.0\")"
+                "[warn] cargo tauri not available (required only for --backend tauri; install with: cargo install tauri-cli --version \"^2.0.0\")"
             );
-            failed = true;
+            false
         }
-    }
+    };
 
     if let Ok(output) = Command::new("pkg-config")
         .args(["--modversion", "webkit2gtk-4.1"])
@@ -62,9 +63,18 @@ pub fn run_doctor() -> Result<()> {
         }
     }
 
-    match resolve_chromium_binary(None) {
-        Ok(path) => println!("[ok] chromium browser found: {}", path.display()),
-        Err(_) => println!("[warn] no chromium-based browser found in PATH"),
+    let chromium_available = match resolve_chromium_binary(None) {
+        Ok(path) => {
+            println!("[ok] chromium browser found: {}", path.display());
+            true
+        }
+        Err(_) => {
+            println!("[warn] no chromium-based browser found in PATH");
+            false
+        }
+    };
+    if !chromium_available && !tauri_available {
+        println!("[warn] no fully available Deskify backend detected");
     }
 
     let executable_dir = xdg::executable_dir()?;
